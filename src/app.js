@@ -3,7 +3,7 @@ import { clamp, lerp, ease, nowS, mulberry32 } from "./utils.js";
 import { loadSettings, saveSettings } from "./settings.js";
 import { VERT, FRAG } from "./shaders.js";
 import { sampleCanvasToParticles } from "./sampling.js";
-import { makeTextCanvas, makeImageCanvas } from "./slideCanvas.js";
+import { makeTextCanvas, makeImageCanvas, makeVideoCanvas } from "./slideCanvas.js";
 
 export function initApp(){
   const settings = loadSettings();
@@ -103,9 +103,9 @@ export function initApp(){
 
   ui.btnAdd.addEventListener("click", ()=> ui.file.click());
   ui.file.addEventListener("change", async () => {
-    const files = [...ui.file.files].filter(f => f && f.type && f.type.startsWith("image/"));
+    const files = [...ui.file.files].filter(isSupportedFile);
     if (!files.length) return;
-    toast(`Loading ${files.length} image(s)...`);
+    toast(`Loading ${files.length} file(s)...`);
     try{
       await addFilesAsSlides(files);
     }catch(err){
@@ -149,9 +149,9 @@ export function initApp(){
     });
   });
   window.addEventListener("drop", async (e) => {
-    const files = [...(e.dataTransfer?.files || [])].filter(f => f && f.type && f.type.startsWith("image/"));
+    const files = [...(e.dataTransfer?.files || [])].filter(isSupportedFile);
     if (!files.length) return;
-    toast(`Loading ${files.length} image(s)...`);
+    toast(`Loading ${files.length} file(s)...`);
     try{
       await addFilesAsSlides(files);
     }catch(err){
@@ -320,6 +320,7 @@ export function initApp(){
     geometry.setAttribute("aSize", new THREE.BufferAttribute(aSize, 1));
 
     points = new THREE.Points(geometry, material);
+    points.frustumCulled = false;
 
     currentSlideIndex = clamp(currentSlideIndex, 0, slides.length-1);
     void applySlide(slides[currentSlideIndex]);
@@ -404,6 +405,8 @@ export function initApp(){
       canvas = makeTextCanvas(slide.title, slide.sub);
     } else if(slide.type === "image"){
       canvas = await makeImageCanvas(slide.img);
+    } else if(slide.type === "video"){
+      canvas = makeVideoCanvas(slide.video);
     } else {
       canvas = makeTextCanvas("MKRShift", "");
     }
@@ -427,8 +430,13 @@ export function initApp(){
 
   async function addFilesAsSlides(files){
     for(const f of files){
-      const img = await loadImageFromFile(f);
-      slides.push({ type:"image", name: f.name, img });
+      if(isVideoFile(f)){
+        const video = await loadVideoFromFile(f);
+        slides.push({ type:"video", name: f.name, video });
+      } else {
+        const img = await loadImageFromFile(f);
+        slides.push({ type:"image", name: f.name, img });
+      }
     }
     currentSlideIndex = slides.length - 1;
     await applySlide(slides[currentSlideIndex]);
@@ -442,6 +450,38 @@ export function initApp(){
       img.onerror = (e)=>{ URL.revokeObjectURL(url); reject(e); };
       img.src = url;
     });
+  }
+
+  function loadVideoFromFile(file){
+    return new Promise((resolve, reject)=> {
+      const url = URL.createObjectURL(file);
+      const video = document.createElement("video");
+      video.preload = "auto";
+      video.muted = true;
+      video.playsInline = true;
+      const onError = (e) => reject(e);
+      const onSeeked = () => resolve(video);
+      const onLoaded = () => {
+        video.currentTime = 0;
+        video.addEventListener("seeked", onSeeked, { once: true });
+      };
+      video.addEventListener("loadedmetadata", onLoaded, { once: true });
+      video.addEventListener("error", onError, { once: true });
+      video.src = url;
+    });
+  }
+
+  function isVideoFile(file){
+    return Boolean(file?.type && file.type.startsWith("video/"));
+  }
+
+  function isSupportedFile(file){
+    if(!file) return false;
+    if(file.type && (file.type.startsWith("image/") || file.type.startsWith("video/"))){
+      return true;
+    }
+    const name = (file.name || "").toLowerCase();
+    return name.endsWith(".gif") || name.endsWith(".mp4") || name.endsWith(".webm");
   }
 
   function nextSlide(){
