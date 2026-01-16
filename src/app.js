@@ -79,6 +79,10 @@ export function initApp(){
     btnRemove: el("btnRemove"),
   };
 
+  const ANIM_SAMPLE_FPS = 12;
+  let lastAnimSample = 0;
+  let currentSlide = null;
+
   ui.btnAdd.addEventListener("click", ()=> ui.file.click());
   ui.file.addEventListener("change", async () => {
     const files = [...ui.file.files].filter(isSupportedFile);
@@ -264,19 +268,20 @@ export function initApp(){
   ui.oscFrequencyVal.textContent = String(settings.oscFrequency);
   ui.oscSpeed.value = settings.oscSpeed;
   ui.oscSpeedVal.textContent = String(settings.oscSpeed);
-  ui.dither.value = settings.dither;
-  ui.oscMode.value = settings.oscMode;
 
-  bindRange(ui.dotsize, ui.dotsizeVal, "dotSize", ()=> material.uniforms.uPointSize.value = settings.dotSize);
+  bindRange(ui.dotsize, ui.dotsizeVal, "dotSize", ()=>{
+    material.uniforms.uPointSize.value = settings.dotSize;
+    syncParticlesToDotSize();
+  });
   bindRange(ui.softness, ui.softnessVal, "softness", ()=> material.uniforms.uSoftness.value = settings.softness);
   bindRange(ui.threshold, ui.thresholdVal, "threshold", ()=>{});
   bindRange(ui.swirl, ui.swirlVal, "swirl", ()=> material.uniforms.uSwirl.value = settings.swirl);
   bindRange(ui.jitter, ui.jitterVal, "jitter", ()=> material.uniforms.uJitter.value = settings.jitter);
-  bindRange(ui.ditherStrength, ui.ditherStrengthVal, "ditherStrength", ()=>{ refreshSlide(); });
-  bindRange(ui.brightness, ui.brightnessVal, "brightness", ()=>{ refreshSlide(); });
-  bindRange(ui.contrast, ui.contrastVal, "contrast", ()=>{ refreshSlide(); });
-  bindRange(ui.saturation, ui.saturationVal, "saturation", ()=>{ refreshSlide(); });
-  bindRange(ui.gamma, ui.gammaVal, "gamma", ()=>{ refreshSlide(); });
+  bindRange(ui.ditherStrength, ui.ditherStrengthVal, "ditherStrength", ()=>{ refreshSlide(true); });
+  bindRange(ui.brightness, ui.brightnessVal, "brightness", ()=>{ refreshSlide(true); });
+  bindRange(ui.contrast, ui.contrastVal, "contrast", ()=>{ refreshSlide(true); });
+  bindRange(ui.saturation, ui.saturationVal, "saturation", ()=>{ refreshSlide(true); });
+  bindRange(ui.gamma, ui.gammaVal, "gamma", ()=>{ refreshSlide(true); });
   bindRange(ui.oscAmplitude, ui.oscAmplitudeVal, "oscAmplitude", ()=> material.uniforms.uOscAmplitude.value = settings.oscAmplitude);
   bindRange(ui.oscFrequency, ui.oscFrequencyVal, "oscFrequency", ()=> material.uniforms.uOscFrequency.value = settings.oscFrequency);
   bindRange(ui.oscSpeed, ui.oscSpeedVal, "oscSpeed", ()=> material.uniforms.uOscSpeed.value = settings.oscSpeed);
@@ -293,12 +298,24 @@ export function initApp(){
     markInteraction();
   });
 
-  ui.mode.addEventListener("change", ()=>{settings.mode = ui.mode.value; saveSettings(settings); refreshSlide(); markInteraction();});
-  ui.dither.addEventListener("change", ()=>{settings.dither = ui.dither.value; saveSettings(settings); refreshSlide(); markInteraction();});
-  ui.brightness.addEventListener("change", ()=>{settings.brightness = parseFloat(ui.brightness.value); saveSettings(settings); refreshSlide(); markInteraction();});
-  ui.contrast.addEventListener("change", ()=>{settings.contrast = parseFloat(ui.contrast.value); saveSettings(settings); refreshSlide(); markInteraction();});
-  ui.saturation.addEventListener("change", ()=>{settings.saturation = parseFloat(ui.saturation.value); saveSettings(settings); refreshSlide(); markInteraction();});
-  ui.gamma.addEventListener("change", ()=>{settings.gamma = parseFloat(ui.gamma.value); saveSettings(settings); refreshSlide(); markInteraction();});
+  function syncParticlesToDotSize(){
+    const baseSize = 2.2;
+    const baseParticles = 18000;
+    const next = Math.round(baseParticles * Math.pow(baseSize / Math.max(settings.dotSize, 0.1), 2));
+    const v = clamp(next, 1, 80000);
+    if(v === settings.maxParticles) return;
+    settings.maxParticles = v;
+    ui.particles.value = v;
+    saveSettings(settings);
+    rebuildParticles();
+  }
+
+  ui.mode.addEventListener("change", ()=>{settings.mode = ui.mode.value; saveSettings(settings); refreshSlide(true); markInteraction();});
+  ui.dither.addEventListener("change", ()=>{settings.dither = ui.dither.value; saveSettings(settings); refreshSlide(true); markInteraction();});
+  ui.brightness.addEventListener("change", ()=>{settings.brightness = parseFloat(ui.brightness.value); saveSettings(settings); refreshSlide(true); markInteraction();});
+  ui.contrast.addEventListener("change", ()=>{settings.contrast = parseFloat(ui.contrast.value); saveSettings(settings); refreshSlide(true); markInteraction();});
+  ui.saturation.addEventListener("change", ()=>{settings.saturation = parseFloat(ui.saturation.value); saveSettings(settings); refreshSlide(true); markInteraction();});
+  ui.gamma.addEventListener("change", ()=>{settings.gamma = parseFloat(ui.gamma.value); saveSettings(settings); refreshSlide(true); markInteraction();});
   ui.oscMode.addEventListener("change", ()=>{
     settings.oscMode = ui.oscMode.value;
     material.uniforms.uOscMode.value = settings.oscMode === "grid" ? 1 : settings.oscMode === "radial" ? 2 : 0;
@@ -449,6 +466,54 @@ export function initApp(){
     geometry.attributes.position.needsUpdate = true;
   }
 
+  function writeInstantFromSample(sample){
+    const N = settings.maxParticles;
+    const M = sample.count;
+    for(let i=0;i<N;i++){
+      const i3 = i*3;
+      if(i < M){
+        const px = sample.pos[i3+0];
+        const py = sample.pos[i3+1];
+        const pz = sample.pos[i3+2];
+        aEnd[i3+0] = px; aEnd[i3+1] = py; aEnd[i3+2] = pz;
+        aStart[i3+0] = px; aStart[i3+1] = py; aStart[i3+2] = pz;
+
+        const cr = sample.col[i3+0];
+        const cg = sample.col[i3+1];
+        const cb = sample.col[i3+2];
+        aColorEnd[i3+0] = cr; aColorEnd[i3+1] = cg; aColorEnd[i3+2] = cb;
+        aColorStart[i3+0] = cr; aColorStart[i3+1] = cg; aColorStart[i3+2] = cb;
+
+        aAlphaEnd[i] = 1;
+        aAlphaStart[i] = 1;
+      } else {
+        const r = 3.2 + Math.random()*2.4;
+        const a = Math.random()*Math.PI*2;
+        const px = Math.cos(a)*r;
+        const py = Math.sin(a)*r;
+        const pz = (Math.random()*2-1)*0.12;
+        aEnd[i3+0] = px; aEnd[i3+1] = py; aEnd[i3+2] = pz;
+        aStart[i3+0] = px; aStart[i3+1] = py; aStart[i3+2] = pz;
+
+        aColorEnd[i3+0] = 1; aColorEnd[i3+1] = 1; aColorEnd[i3+2] = 1;
+        aColorStart[i3+0] = 1; aColorStart[i3+1] = 1; aColorStart[i3+2] = 1;
+
+        aAlphaEnd[i] = 0;
+        aAlphaStart[i] = 0;
+      }
+    }
+
+    geometry.attributes.aStart.needsUpdate = true;
+    geometry.attributes.aEnd.needsUpdate = true;
+    geometry.attributes.aColorStart.needsUpdate = true;
+    geometry.attributes.aColorEnd.needsUpdate = true;
+    geometry.attributes.aAlphaStart.needsUpdate = true;
+    geometry.attributes.aAlphaEnd.needsUpdate = true;
+    geometry.attributes.position.needsUpdate = true;
+    transitioning = false;
+    material.uniforms.uMorph.value = 1;
+  }
+
   function updateScaleUniform(){
     const w = window.innerWidth;
     const h = window.innerHeight;
@@ -476,6 +541,7 @@ export function initApp(){
     }
 
     const sample = sampleCanvasToParticles(canvas, settings);
+    currentSlide = slide;
     currentImgAspect = sample.imgAspect;
     updateScaleUniform();
 
@@ -488,18 +554,41 @@ export function initApp(){
     material.uniforms.uMorph.value = 0;
   }
 
-  function refreshSlide(){
-    void applySlide(slides[currentSlideIndex]);
+  function refreshSlide(instant = false){
+    void applySlideInstant(slides[currentSlideIndex], instant);
+  }
+
+  async function applySlideInstant(slide, instant){
+    if(!instant){
+      await applySlide(slide);
+      return;
+    }
+    let canvas = null;
+    if(slide.type === "text"){
+      canvas = makeTextCanvas(slide.title, slide.sub);
+    } else if(slide.type === "image"){
+      canvas = await makeImageCanvas(slide.img);
+    } else if(slide.type === "video"){
+      canvas = makeVideoCanvas(slide.video);
+    } else {
+      canvas = makeTextCanvas("MKRShift", "");
+    }
+    const sample = sampleCanvasToParticles(canvas, settings);
+    currentSlide = slide;
+    currentImgAspect = sample.imgAspect;
+    updateScaleUniform();
+    writeInstantFromSample(sample);
   }
 
   async function addFilesAsSlides(files){
     for(const f of files){
       if(isVideoFile(f)){
         const video = await loadVideoFromFile(f);
-        slides.push({ type:"video", name: f.name, video });
+        slides.push({ type:"video", name: f.name, video, animated: true });
       } else {
         const img = await loadImageFromFile(f);
-        slides.push({ type:"image", name: f.name, img });
+        const animated = isGifFile(f);
+        slides.push({ type:"image", name: f.name, img, animated });
       }
     }
     currentSlideIndex = slides.length - 1;
@@ -523,6 +612,7 @@ export function initApp(){
       video.preload = "auto";
       video.muted = true;
       video.playsInline = true;
+      video.loop = true;
       const onError = (e) => reject(e);
       const onSeeked = () => resolve(video);
       const onLoaded = () => {
@@ -537,6 +627,11 @@ export function initApp(){
 
   function isVideoFile(file){
     return Boolean(file?.type && file.type.startsWith("video/"));
+  }
+
+  function isGifFile(file){
+    const name = (file?.name || "").toLowerCase();
+    return file?.type === "image/gif" || name.endsWith(".gif");
   }
 
   function isSupportedFile(file){
@@ -573,6 +668,16 @@ export function initApp(){
 
     const t = nowS();
     material.uniforms.uTime.value = t;
+
+    if(currentSlide?.animated){
+      if(currentSlide.type === "video"){
+        currentSlide.video.play().catch(()=>{});
+      }
+      if(t - lastAnimSample > 1 / ANIM_SAMPLE_FPS){
+        lastAnimSample = t;
+        void applySlideInstant(currentSlide, true);
+      }
+    }
 
     if(settings.autoplay && t >= nextAuto){
       nextAuto = t + settings.interval;

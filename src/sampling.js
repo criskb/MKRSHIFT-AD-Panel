@@ -154,18 +154,18 @@ export function sampleCanvasToParticles(canvas, opts){
     pos[i*3+1] = yN;
     pos[i*3+2] = zN;
 
-        // Color: either keep image colors, or mostly white for silhouette.
-        if(mode === "silhouette"){
-          col[i*3+0] = 1.0;
-          col[i*3+1] = 1.0;
-          col[i*3+2] = 1.0;
-        } else {
-          const [rf, gf, bf] = adjustColor(p.r, p.g, p.b);
-          col[i*3+0] = rf;
-          col[i*3+1] = gf;
-          col[i*3+2] = bf;
-        }
-      }
+    // Color: either keep image colors, or mostly white for silhouette.
+    if(mode === "silhouette"){
+      col[i*3+0] = 1.0;
+      col[i*3+1] = 1.0;
+      col[i*3+2] = 1.0;
+    } else {
+      const [rf, gf, bf] = adjustColor(p.r, p.g, p.b);
+      col[i*3+0] = rf;
+      col[i*3+1] = gf;
+      col[i*3+2] = bf;
+    }
+  }
 
   return { pos, col, count, imgAspect: aspect };
 }
