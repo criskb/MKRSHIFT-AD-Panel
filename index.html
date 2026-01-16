@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MKRShift DotScreen (Three.js)</title>
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <div id="hud" aria-hidden="true">
+      <div class="title">MKRShift DotScreen</div>
+      <div class="hint">Drag images in • Press <b>H</b> hide UI • <b>F</b> fullscreen • <b>S</b> settings</div>
+    </div>
+
+    <div id="panel" class="hidden">
+      <div class="row" style="margin-top:0">
+        <div>
+          <div style="font-weight:800;letter-spacing:.2px">DotScreen Controls</div>
+          <div style="font-size:12px;color:var(--ui-tx-dim);margin-top:3px">Made for MKRShift ad screens (kiosk friendly).</div>
+        </div>
+        <button class="btn" id="btnClose">Close</button>
+      </div>
+
+      <div id="dropzone">Drop images/videos here (PNG/JPG/WebP/GIF/MP4/WebM) or use “Add Media”</div>
+
+      <div class="divider"></div>
+
+      <div class="split">
+        <button class="btn primary" id="btnFullscreen">Fullscreen</button>
+        <button class="btn" id="btnHide">Hide UI (H)</button>
+      </div>
+
+      <div class="row">
+        <label>Autoplay</label>
+        <div class="ctl">
+          <select id="autoplay">
+            <option value="1">On</option>
+            <option value="0">Off</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Slide interval (sec)</label>
+        <div class="ctl">
+          <input id="interval" type="number" min="2" max="60" step="1" value="8" />
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Transition (sec)</label>
+        <div class="ctl">
+          <input id="transition" type="number" min="0.6" max="10" step="0.1" value="2.2" />
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Particles</label>
+        <div class="ctl">
+          <input id="particles" type="number" min="1" max="80000" step="1000" value="18000" />
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Dot size</label>
+        <div class="ctl">
+          <input id="dotsize" type="range" min="0.6" max="50" step="0.1" value="2.2" />
+          <span id="dotsizeVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">2.2</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Sharpness</label>
+        <div class="ctl">
+          <input id="softness" type="range" min="0.02" max="0.35" step="0.01" value="0.13" />
+          <span id="softnessVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">0.13</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Sampling mode</label>
+        <div class="ctl">
+          <select id="mode">
+            <option value="auto">Auto</option>
+            <option value="silhouette">Silhouette</option>
+            <option value="edges">Edges</option>
+            <option value="full">Full image</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Dither</label>
+        <div class="ctl">
+          <select id="dither">
+            <option value="none">None</option>
+            <option value="bayer2">Bayer 2×2</option>
+            <option value="bayer4">Bayer 4×4</option>
+            <option value="random">Random</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Dither strength</label>
+        <div class="ctl">
+          <input id="ditherStrength" type="range" min="0" max="1" step="0.01" value="0.35" />
+          <span id="ditherStrengthVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">0.35</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Contrast threshold</label>
+        <div class="ctl">
+          <input id="threshold" type="range" min="0.05" max="0.95" step="0.01" value="0.62" />
+          <span id="thresholdVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">0.62</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Swirl</label>
+        <div class="ctl">
+          <input id="swirl" type="range" min="0" max="6" step="0.1" value="2.2" />
+          <span id="swirlVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">2.2</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Jitter</label>
+        <div class="ctl">
+          <input id="jitter" type="range" min="0" max="2.5" step="0.05" value="0.55" />
+          <span id="jitterVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">0.55</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Blending</label>
+        <div class="ctl">
+          <select id="blend">
+            <option value="add">Additive</option>
+            <option value="normal">Normal</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="row">
+        <label>Brightness</label>
+        <div class="ctl">
+          <input id="brightness" type="range" min="-0.5" max="0.5" step="0.01" value="0" />
+          <span id="brightnessVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">0</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Contrast</label>
+        <div class="ctl">
+          <input id="contrast" type="range" min="0.5" max="2" step="0.01" value="1" />
+          <span id="contrastVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">1</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Saturation</label>
+        <div class="ctl">
+          <input id="saturation" type="range" min="0" max="2" step="0.01" value="1" />
+          <span id="saturationVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">1</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Gamma</label>
+        <div class="ctl">
+          <input id="gamma" type="range" min="0.5" max="2.5" step="0.01" value="1" />
+          <span id="gammaVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">1</span>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="row">
+        <label>Oscillation</label>
+        <div class="ctl">
+          <select id="oscMode">
+            <option value="none">None</option>
+            <option value="grid">Grid</option>
+            <option value="radial">Radial</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Osc amplitude</label>
+        <div class="ctl">
+          <input id="oscAmplitude" type="range" min="0" max="6" step="0.05" value="0" />
+          <span id="oscAmplitudeVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">0</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Osc frequency</label>
+        <div class="ctl">
+          <input id="oscFrequency" type="range" min="0.5" max="12" step="0.1" value="3" />
+          <span id="oscFrequencyVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">3</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Osc speed</label>
+        <div class="ctl">
+          <input id="oscSpeed" type="range" min="0" max="6" step="0.05" value="1.2" />
+          <span id="oscSpeedVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">1.2</span>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="row">
+        <label>Add media</label>
+        <div class="ctl">
+          <input id="file" type="file" accept="image/*,video/*" multiple style="display:none" />
+          <button class="btn" id="btnAdd">Add Media</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Add text slide</label>
+        <div class="ctl" style="gap:6px;flex-wrap:wrap">
+          <input id="textTitle" type="text" placeholder="Title" value="MKRShift" style="width:150px" />
+          <input id="textSub" type="text" placeholder="Subtitle" value="3D • AI • Creative Tech" style="width:190px" />
+          <button class="btn" id="btnAddText">Add</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Playlist</label>
+        <div class="ctl">
+          <button class="btn" id="btnPrev">◀</button>
+          <button class="btn" id="btnNext">▶</button>
+          <button class="btn" id="btnRemove">Remove</button>
+        </div>
+      </div>
+
+      <div style="font-size:12px;color:var(--ui-tx-dim);line-height:1.35;margin-top:6px">
+        Tip: use transparent PNGs (logos) for the cleanest “OpenAI ad” style. For kiosk mode, open with <b>?kiosk=1</b>.
+      </div>
+    </div>
+
+    <div id="watermark">Prompted by Cris K B • <b>MKRShift</b></div>
+
+    <div id="toast" aria-hidden="true"></div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
