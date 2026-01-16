@@ -61,46 +61,6 @@ export function initApp(){
     btnRemove: el("btnRemove"),
   };
 
-  function bindRange(rangeEl, outEl, key, onChange){
-    rangeEl.value = settings[key];
-    outEl.textContent = String(settings[key]);
-    rangeEl.addEventListener("input", ()=>{
-      settings[key] = parseFloat(rangeEl.value);
-      outEl.textContent = String(settings[key]);
-      saveSettings(settings);
-      onChange?.();
-      markInteraction();
-    });
-  }
-
-  ui.autoplay.value = settings.autoplay ? "1" : "0";
-  ui.interval.value = settings.interval;
-  ui.transition.value = settings.transition;
-  ui.particles.value = settings.maxParticles;
-  ui.mode.value = settings.mode;
-  ui.blend.value = settings.blend;
-
-  bindRange(ui.dotsize, ui.dotsizeVal, "dotSize", ()=> material.uniforms.uPointSize.value = settings.dotSize);
-  bindRange(ui.softness, ui.softnessVal, "softness", ()=> material.uniforms.uSoftness.value = settings.softness);
-  bindRange(ui.threshold, ui.thresholdVal, "threshold", ()=>{});
-  bindRange(ui.swirl, ui.swirlVal, "swirl", ()=> material.uniforms.uSwirl.value = settings.swirl);
-  bindRange(ui.jitter, ui.jitterVal, "jitter", ()=> material.uniforms.uJitter.value = settings.jitter);
-
-  ui.autoplay.addEventListener("change", ()=>{settings.autoplay = ui.autoplay.value === "1"; saveSettings(settings); markInteraction();});
-  ui.interval.addEventListener("change", ()=>{settings.interval = clamp(parseFloat(ui.interval.value)||8,2,60); ui.interval.value=settings.interval; saveSettings(settings); markInteraction();});
-  ui.transition.addEventListener("change", ()=>{settings.transition = clamp(parseFloat(ui.transition.value)||2.2,0.6,10); ui.transition.value=settings.transition; saveSettings(settings); markInteraction();});
-  ui.particles.addEventListener("change", ()=>{
-    const v = clamp(parseInt(ui.particles.value||"18000",10), 2000, 80000);
-    ui.particles.value = v;
-    settings.maxParticles = v;
-    saveSettings(settings);
-    rebuildParticles();
-    markInteraction();
-  });
-
-  ui.mode.addEventListener("change", ()=>{settings.mode = ui.mode.value; saveSettings(settings); refreshSlide(); markInteraction();});
-  ui.blend.addEventListener("change", ()=>{settings.blend = ui.blend.value; saveSettings(settings); applyBlend(); markInteraction();});
-
   ui.btnAdd.addEventListener("click", ()=> ui.file.click());
   ui.file.addEventListener("change", async () => {
     const files = [...ui.file.files].filter(isSupportedFile);
@@ -245,6 +205,46 @@ export function initApp(){
     material.blending = (settings.blend === "add") ? THREE.AdditiveBlending : THREE.NormalBlending;
     material.needsUpdate = true;
   }
+
+  function bindRange(rangeEl, outEl, key, onChange){
+    rangeEl.value = settings[key];
+    outEl.textContent = String(settings[key]);
+    rangeEl.addEventListener("input", ()=>{
+      settings[key] = parseFloat(rangeEl.value);
+      outEl.textContent = String(settings[key]);
+      saveSettings(settings);
+      onChange?.();
+      markInteraction();
+    });
+  }
+
+  ui.autoplay.value = settings.autoplay ? "1" : "0";
+  ui.interval.value = settings.interval;
+  ui.transition.value = settings.transition;
+  ui.particles.value = settings.maxParticles;
+  ui.mode.value = settings.mode;
+  ui.blend.value = settings.blend;
+
+  bindRange(ui.dotsize, ui.dotsizeVal, "dotSize", ()=> material.uniforms.uPointSize.value = settings.dotSize);
+  bindRange(ui.softness, ui.softnessVal, "softness", ()=> material.uniforms.uSoftness.value = settings.softness);
+  bindRange(ui.threshold, ui.thresholdVal, "threshold", ()=>{});
+  bindRange(ui.swirl, ui.swirlVal, "swirl", ()=> material.uniforms.uSwirl.value = settings.swirl);
+  bindRange(ui.jitter, ui.jitterVal, "jitter", ()=> material.uniforms.uJitter.value = settings.jitter);
+
+  ui.autoplay.addEventListener("change", ()=>{settings.autoplay = ui.autoplay.value === "1"; saveSettings(settings); markInteraction();});
+  ui.interval.addEventListener("change", ()=>{settings.interval = clamp(parseFloat(ui.interval.value)||8,2,60); ui.interval.value=settings.interval; saveSettings(settings); markInteraction();});
+  ui.transition.addEventListener("change", ()=>{settings.transition = clamp(parseFloat(ui.transition.value)||2.2,0.6,10); ui.transition.value=settings.transition; saveSettings(settings); markInteraction();});
+  ui.particles.addEventListener("change", ()=>{
+    const v = clamp(parseInt(ui.particles.value||"18000",10), 2000, 80000);
+    ui.particles.value = v;
+    settings.maxParticles = v;
+    saveSettings(settings);
+    rebuildParticles();
+    markInteraction();
+  });
+
+  ui.mode.addEventListener("change", ()=>{settings.mode = ui.mode.value; saveSettings(settings); refreshSlide(); markInteraction();});
+  ui.blend.addEventListener("change", ()=>{settings.blend = ui.blend.value; saveSettings(settings); applyBlend(); markInteraction();});
 
   let geometry = null;
   let points = null;
