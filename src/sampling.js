@@ -5,6 +5,7 @@ export function sampleCanvasToParticles(canvas, opts){
   const w = canvas.width;
   const h = canvas.height;
   const img = ctx.getImageData(0,0,w,h).data;
+  const aspect = w / h;
 
   // Auto mode heuristic: if lots of transparency, use alpha/silhouette.
   let transparentCount = 0;
@@ -64,6 +65,36 @@ export function sampleCanvasToParticles(canvas, opts){
     return clamp(lum + (dv - 0.5) * strength, 0, 1);
   }
 
+  function ditherValueGrid(x, y){
+    const type = opts.ditherType ?? "none";
+    if(!type || type === "none") return 0.5;
+    if(type === "random") return Math.random();
+    if(type === "bayer2"){
+      const m = [
+        [0, 2],
+        [3, 1],
+      ];
+      return (m[y % 2][x % 2] + 0.5) / 4;
+    }
+    if(type === "bayer4"){
+      const m = [
+        [0, 8, 2, 10],
+        [12, 4, 14, 6],
+        [3, 11, 1, 9],
+        [15, 7, 13, 5],
+      ];
+      return (m[y % 4][x % 4] + 0.5) / 16;
+    }
+    return 0.5;
+  }
+
+  function applyGridDither(lum, gx, gy){
+    const strength = clamp(opts.ditherStrength ?? 0, 0, 1);
+    if(!opts.ditherType || opts.ditherType === "none" || strength <= 0) return lum;
+    const dv = ditherValueGrid(gx, gy);
+    return clamp(lum + (dv - 0.5) * strength, 0, 1);
+  }
+
   function adjustColor(r, g, b){
     let rf = r / 255;
     let gf = g / 255;
@@ -91,6 +122,114 @@ export function sampleCanvasToParticles(canvas, opts){
     bf = clamp(Math.pow(bf, invGamma), 0, 1);
 
     return [rf, gf, bf];
+  }
+
+  if(mode === "grid"){
+    const gridSize = clamp(Math.round(opts.gridSize ?? 16), 2, 200);
+    const smoothing = clamp(opts.smoothing ?? 0, 0, 1);
+    const cols = Math.ceil(w / gridSize);
+    const rows = Math.ceil(h / gridSize);
+    const cellCount = cols * rows;
+    const cellLum = new Float32Array(cellCount);
+    const cellAlpha = new Float32Array(cellCount);
+    const cellColor = new Float32Array(cellCount * 3);
+
+    for(let gy=0; gy<rows; gy++){
+      const y0 = gy * gridSize;
+      const y1 = Math.min(h, y0 + gridSize);
+      for(let gx=0; gx<cols; gx++){
+        const x0 = gx * gridSize;
+        const x1 = Math.min(w, x0 + gridSize);
+        let sumR = 0, sumG = 0, sumB = 0, sumA = 0, count = 0;
+        for(let y=y0; y<y1; y++){
+          for(let x=x0; x<x1; x++){
+            const i = (y*w + x) * 4;
+            sumR += img[i+0];
+            sumG += img[i+1];
+            sumB += img[i+2];
+            sumA += img[i+3];
+            count++;
+          }
+        }
+        const idx = gy * cols + gx;
+        if(count === 0) continue;
+        const r = sumR / count;
+        const g = sumG / count;
+        const b = sumB / count;
+        const a = sumA / (count * 255);
+        cellColor[idx*3+0] = r;
+        cellColor[idx*3+1] = g;
+        cellColor[idx*3+2] = b;
+        cellAlpha[idx] = a;
+        cellLum[idx] = (0.2126*r + 0.7152*g + 0.0722*b) / 255;
+      }
+    }
+
+    const smoothed = new Float32Array(cellCount);
+    if(smoothing > 0){
+      for(let gy=0; gy<rows; gy++){
+        for(let gx=0; gx<cols; gx++){
+          let sum = 0;
+          let c = 0;
+          for(let oy=-1; oy<=1; oy++){
+            const ny = gy + oy;
+            if(ny < 0 || ny >= rows) continue;
+            for(let ox=-1; ox<=1; ox++){
+              const nx = gx + ox;
+              if(nx < 0 || nx >= cols) continue;
+              sum += cellLum[ny * cols + nx];
+              c++;
+            }
+          }
+          const idx = gy * cols + gx;
+          const avg = c ? sum / c : cellLum[idx];
+          smoothed[idx] = clamp(cellLum[idx] + (avg - cellLum[idx]) * smoothing, 0, 1);
+        }
+      }
+    } else {
+      smoothed.set(cellLum);
+    }
+
+    const desired = Math.max(1, N);
+    const gridStep = Math.max(1, Math.ceil(Math.sqrt(cellCount / desired)));
+    const posList = [];
+    const colList = [];
+    const alphaList = [];
+
+    for(let gy=0; gy<rows; gy+=gridStep){
+      const y0 = gy * gridSize;
+      const y1 = Math.min(h, y0 + gridSize);
+      const cy = y0 + (y1 - y0) * 0.5;
+      for(let gx=0; gx<cols; gx+=gridStep){
+        const x0 = gx * gridSize;
+        const x1 = Math.min(w, x0 + gridSize);
+        const cx = x0 + (x1 - x0) * 0.5;
+        const idx = gy * cols + gx;
+        if(cellAlpha[idx] <= 0.02) continue;
+        let lum = applyGridDither(smoothed[idx], gx, gy);
+        const alpha = clamp((1 - lum) * cellAlpha[idx], 0, 1);
+        if(alpha <= 0.01) continue;
+
+        const xN = ((cx / w) - 0.5) * 2.0 * aspect;
+        const yN = (0.5 - (cy / h)) * 2.0;
+        const zN = (Math.random()*2 - 1) * 0.02;
+        posList.push(xN, yN, zN);
+
+        const [rf, gf, bf] = adjustColor(
+          cellColor[idx*3+0],
+          cellColor[idx*3+1],
+          cellColor[idx*3+2],
+        );
+        colList.push(rf, gf, bf);
+        alphaList.push(alpha);
+      }
+    }
+
+    const count = Math.min(desired, Math.floor(posList.length / 3));
+    const pos = new Float32Array(posList.slice(0, count * 3));
+    const col = new Float32Array(colList.slice(0, count * 3));
+    const alpha = new Float32Array(alphaList.slice(0, count));
+    return { pos, col, alpha, count, imgAspect: aspect };
   }
 
   for(let y=1; y<h-1; y+=step){
@@ -138,10 +277,10 @@ export function sampleCanvasToParticles(canvas, opts){
   const rng = mulberry32((Math.random()*1e9)|0);
   shuffleInPlace(candidates, rng);
 
-  const aspect = w / h;
   const count = Math.min(N, candidates.length);
   const pos = new Float32Array(count * 3);
   const col = new Float32Array(count * 3);
+  const alpha = new Float32Array(count);
 
   for(let i=0;i<count;i++){
     const p = candidates[i];
@@ -165,7 +304,8 @@ export function sampleCanvasToParticles(canvas, opts){
       col[i*3+1] = gf;
       col[i*3+2] = bf;
     }
+    alpha[i] = 1;
   }
 
-  return { pos, col, count, imgAspect: aspect };
+  return { pos, col, alpha, count, imgAspect: aspect };
 }

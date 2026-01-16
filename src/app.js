@@ -62,6 +62,9 @@ export function initApp(){
     saturationVal: el("saturationVal"),
     gamma: el("gamma"),
     gammaVal: el("gammaVal"),
+    gridSize: el("gridSize"),
+    smoothing: el("smoothing"),
+    ditherType: el("ditherType"),
     oscMode: el("oscMode"),
     oscAmplitude: el("oscAmplitude"),
     oscAmplitudeVal: el("oscAmplitudeVal"),
@@ -261,6 +264,9 @@ export function initApp(){
   ui.saturationVal.textContent = String(settings.saturation);
   ui.gamma.value = settings.gamma;
   ui.gammaVal.textContent = String(settings.gamma);
+  ui.gridSize.value = settings.gridSize;
+  ui.smoothing.value = settings.smoothing;
+  ui.ditherType.value = settings.ditherType;
   ui.oscMode.value = settings.oscMode;
   ui.oscAmplitude.value = settings.oscAmplitude;
   ui.oscAmplitudeVal.textContent = String(settings.oscAmplitude);
@@ -285,6 +291,27 @@ export function initApp(){
   bindRange(ui.oscAmplitude, ui.oscAmplitudeVal, "oscAmplitude", ()=> material.uniforms.uOscAmplitude.value = settings.oscAmplitude);
   bindRange(ui.oscFrequency, ui.oscFrequencyVal, "oscFrequency", ()=> material.uniforms.uOscFrequency.value = settings.oscFrequency);
   bindRange(ui.oscSpeed, ui.oscSpeedVal, "oscSpeed", ()=> material.uniforms.uOscSpeed.value = settings.oscSpeed);
+
+  ui.gridSize.addEventListener("input", ()=>{
+    settings.gridSize = clamp(parseInt(ui.gridSize.value || "16", 10), 2, 200);
+    ui.gridSize.value = settings.gridSize;
+    saveSettings(settings);
+    refreshSlide(true);
+    markInteraction();
+  });
+  ui.smoothing.addEventListener("input", ()=>{
+    settings.smoothing = clamp(parseFloat(ui.smoothing.value || "0"), 0, 1);
+    ui.smoothing.value = settings.smoothing;
+    saveSettings(settings);
+    refreshSlide(true);
+    markInteraction();
+  });
+  ui.ditherType.addEventListener("change", ()=>{
+    settings.ditherType = ui.ditherType.value;
+    saveSettings(settings);
+    refreshSlide(true);
+    markInteraction();
+  });
 
   ui.autoplay.addEventListener("change", ()=>{settings.autoplay = ui.autoplay.value === "1"; saveSettings(settings); markInteraction();});
   ui.interval.addEventListener("change", ()=>{settings.interval = clamp(parseFloat(ui.interval.value)||8,2,60); ui.interval.value=settings.interval; saveSettings(settings); markInteraction();});
@@ -432,6 +459,7 @@ export function initApp(){
   function writeEndFromSample(sample){
     const N = settings.maxParticles;
     const M = sample.count;
+    const sampleAlpha = sample.alpha;
 
     for(let i=0;i<N;i++){
       const i3 = i*3;
@@ -444,7 +472,7 @@ export function initApp(){
         aColorEnd[i3+1] = sample.col[i3+1];
         aColorEnd[i3+2] = sample.col[i3+2];
 
-        aAlphaEnd[i] = 1;
+        aAlphaEnd[i] = sampleAlpha ? sampleAlpha[i] : 1;
       } else {
         const r = 3.2 + Math.random()*2.4;
         const a = Math.random()*Math.PI*2;
@@ -469,6 +497,7 @@ export function initApp(){
   function writeInstantFromSample(sample){
     const N = settings.maxParticles;
     const M = sample.count;
+    const sampleAlpha = sample.alpha;
     for(let i=0;i<N;i++){
       const i3 = i*3;
       if(i < M){
@@ -484,8 +513,9 @@ export function initApp(){
         aColorEnd[i3+0] = cr; aColorEnd[i3+1] = cg; aColorEnd[i3+2] = cb;
         aColorStart[i3+0] = cr; aColorStart[i3+1] = cg; aColorStart[i3+2] = cb;
 
-        aAlphaEnd[i] = 1;
-        aAlphaStart[i] = 1;
+        const alpha = sampleAlpha ? sampleAlpha[i] : 1;
+        aAlphaEnd[i] = alpha;
+        aAlphaStart[i] = alpha;
       } else {
         const r = 3.2 + Math.random()*2.4;
         const a = Math.random()*Math.PI*2;
