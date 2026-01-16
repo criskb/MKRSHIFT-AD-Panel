@@ -1,0 +1,79 @@
+export const VERT = `
+  precision highp float;
+  attribute vec3 aStart;
+  attribute vec3 aEnd;
+  attribute vec3 aColorStart;
+  attribute vec3 aColorEnd;
+  attribute float aAlphaStart;
+  attribute float aAlphaEnd;
+  attribute float aSeed;
+  attribute float aSize;
+
+  uniform float uTime;
+  uniform float uMorph;
+  uniform float uScale;
+  uniform float uPointSize;
+  uniform float uDpr;
+  uniform float uSwirl;
+  uniform float uJitter;
+
+  varying vec3 vColor;
+  varying float vAlpha;
+
+  float easeInOut(float t){
+    t = clamp(t, 0.0, 1.0);
+    return t*t*(3.0 - 2.0*t);
+  }
+
+  void main(){
+    float m = easeInOut(uMorph);
+    vec3 pos = mix(aStart, aEnd, m);
+
+    // Transition swirl
+    float swirl = (1.0 - m) * uSwirl * (0.35 + fract(aSeed) * 0.65);
+    float cs = cos(swirl);
+    float sn = sin(swirl);
+    pos.xy = mat2(cs, -sn, sn, cs) * pos.xy;
+
+    // Gentle jitter (more when transitioning)
+    float j = uJitter * (0.35 + 0.65*(1.0 - m));
+    pos.x += sin(uTime*1.7 + aSeed*6.1) * j;
+    pos.y += cos(uTime*1.3 + aSeed*5.3) * j;
+    pos.z += sin(uTime*1.1 + aSeed*4.7) * (j*0.55);
+
+    pos.xy *= uScale;
+
+    vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+    gl_Position = projectionMatrix * mv;
+
+    float size = aSize * uPointSize * uDpr;
+    gl_PointSize = size;
+
+    vColor = mix(aColorStart, aColorEnd, m);
+    vAlpha = mix(aAlphaStart, aAlphaEnd, m);
+  }
+`;
+
+export const FRAG = `
+  precision highp float;
+  varying vec3 vColor;
+  varying float vAlpha;
+
+  uniform float uSoftness;
+
+  void main(){
+    vec2 uv = gl_PointCoord.xy - 0.5;
+    float d = length(uv);
+
+    float edge = 0.5;
+    float a = 1.0 - smoothstep(edge - uSoftness, edge, d);
+    a *= vAlpha;
+    if(a < 0.01) discard;
+
+    // Slight core brightness
+    float core = 1.0 - smoothstep(0.0, 0.35, d);
+    vec3 col = vColor + vColor * core * 0.25;
+
+    gl_FragColor = vec4(col, a);
+  }
+`;
