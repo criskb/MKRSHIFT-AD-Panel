@@ -312,6 +312,7 @@ export function initApp(){
 
     geometry.setAttribute("aStart", new THREE.BufferAttribute(aStart, 3));
     geometry.setAttribute("aEnd", new THREE.BufferAttribute(aEnd, 3));
+    geometry.setAttribute("position", new THREE.BufferAttribute(aEnd, 3));
     geometry.setAttribute("aColorStart", new THREE.BufferAttribute(aColorStart, 3));
     geometry.setAttribute("aColorEnd", new THREE.BufferAttribute(aColorEnd, 3));
     geometry.setAttribute("aAlphaStart", new THREE.BufferAttribute(aAlphaStart, 1));
@@ -319,6 +320,7 @@ export function initApp(){
     geometry.setAttribute("aSeed", new THREE.BufferAttribute(aSeed, 1));
     geometry.setAttribute("aSize", new THREE.BufferAttribute(aSize, 1));
 
+    geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 10000);
     points = new THREE.Points(geometry, material);
     points.frustumCulled = false;
 
@@ -383,6 +385,7 @@ export function initApp(){
     geometry.attributes.aEnd.needsUpdate = true;
     geometry.attributes.aColorEnd.needsUpdate = true;
     geometry.attributes.aAlphaEnd.needsUpdate = true;
+    geometry.attributes.position.needsUpdate = true;
   }
 
   function updateScaleUniform(){
