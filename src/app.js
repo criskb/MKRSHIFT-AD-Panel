@@ -44,6 +44,9 @@ export function initApp(){
     softness: el("softness"),
     softnessVal: el("softnessVal"),
     mode: el("mode"),
+    dither: el("dither"),
+    ditherStrength: el("ditherStrength"),
+    ditherStrengthVal: el("ditherStrengthVal"),
     threshold: el("threshold"),
     thresholdVal: el("thresholdVal"),
     swirl: el("swirl"),
@@ -51,6 +54,21 @@ export function initApp(){
     jitter: el("jitter"),
     jitterVal: el("jitterVal"),
     blend: el("blend"),
+    brightness: el("brightness"),
+    brightnessVal: el("brightnessVal"),
+    contrast: el("contrast"),
+    contrastVal: el("contrastVal"),
+    saturation: el("saturation"),
+    saturationVal: el("saturationVal"),
+    gamma: el("gamma"),
+    gammaVal: el("gammaVal"),
+    oscMode: el("oscMode"),
+    oscAmplitude: el("oscAmplitude"),
+    oscAmplitudeVal: el("oscAmplitudeVal"),
+    oscFrequency: el("oscFrequency"),
+    oscFrequencyVal: el("oscFrequencyVal"),
+    oscSpeed: el("oscSpeed"),
+    oscSpeedVal: el("oscSpeedVal"),
     file: el("file"),
     btnAdd: el("btnAdd"),
     textTitle: el("textTitle"),
@@ -198,6 +216,10 @@ export function initApp(){
       uSoftness: { value: settings.softness },
       uSwirl: { value: settings.swirl },
       uJitter: { value: settings.jitter },
+      uOscAmplitude: { value: settings.oscAmplitude },
+      uOscFrequency: { value: settings.oscFrequency },
+      uOscSpeed: { value: settings.oscSpeed },
+      uOscMode: { value: settings.oscMode === "grid" ? 1 : settings.oscMode === "radial" ? 2 : 0 },
     }
   });
 
@@ -224,18 +246,46 @@ export function initApp(){
   ui.particles.value = settings.maxParticles;
   ui.mode.value = settings.mode;
   ui.blend.value = settings.blend;
+  ui.dither.value = settings.dither;
+  ui.ditherStrength.value = settings.ditherStrength;
+  ui.ditherStrengthVal.textContent = String(settings.ditherStrength);
+  ui.brightness.value = settings.brightness;
+  ui.brightnessVal.textContent = String(settings.brightness);
+  ui.contrast.value = settings.contrast;
+  ui.contrastVal.textContent = String(settings.contrast);
+  ui.saturation.value = settings.saturation;
+  ui.saturationVal.textContent = String(settings.saturation);
+  ui.gamma.value = settings.gamma;
+  ui.gammaVal.textContent = String(settings.gamma);
+  ui.oscMode.value = settings.oscMode;
+  ui.oscAmplitude.value = settings.oscAmplitude;
+  ui.oscAmplitudeVal.textContent = String(settings.oscAmplitude);
+  ui.oscFrequency.value = settings.oscFrequency;
+  ui.oscFrequencyVal.textContent = String(settings.oscFrequency);
+  ui.oscSpeed.value = settings.oscSpeed;
+  ui.oscSpeedVal.textContent = String(settings.oscSpeed);
+  ui.dither.value = settings.dither;
+  ui.oscMode.value = settings.oscMode;
 
   bindRange(ui.dotsize, ui.dotsizeVal, "dotSize", ()=> material.uniforms.uPointSize.value = settings.dotSize);
   bindRange(ui.softness, ui.softnessVal, "softness", ()=> material.uniforms.uSoftness.value = settings.softness);
   bindRange(ui.threshold, ui.thresholdVal, "threshold", ()=>{});
   bindRange(ui.swirl, ui.swirlVal, "swirl", ()=> material.uniforms.uSwirl.value = settings.swirl);
   bindRange(ui.jitter, ui.jitterVal, "jitter", ()=> material.uniforms.uJitter.value = settings.jitter);
+  bindRange(ui.ditherStrength, ui.ditherStrengthVal, "ditherStrength", ()=>{ refreshSlide(); });
+  bindRange(ui.brightness, ui.brightnessVal, "brightness", ()=>{ refreshSlide(); });
+  bindRange(ui.contrast, ui.contrastVal, "contrast", ()=>{ refreshSlide(); });
+  bindRange(ui.saturation, ui.saturationVal, "saturation", ()=>{ refreshSlide(); });
+  bindRange(ui.gamma, ui.gammaVal, "gamma", ()=>{ refreshSlide(); });
+  bindRange(ui.oscAmplitude, ui.oscAmplitudeVal, "oscAmplitude", ()=> material.uniforms.uOscAmplitude.value = settings.oscAmplitude);
+  bindRange(ui.oscFrequency, ui.oscFrequencyVal, "oscFrequency", ()=> material.uniforms.uOscFrequency.value = settings.oscFrequency);
+  bindRange(ui.oscSpeed, ui.oscSpeedVal, "oscSpeed", ()=> material.uniforms.uOscSpeed.value = settings.oscSpeed);
 
   ui.autoplay.addEventListener("change", ()=>{settings.autoplay = ui.autoplay.value === "1"; saveSettings(settings); markInteraction();});
   ui.interval.addEventListener("change", ()=>{settings.interval = clamp(parseFloat(ui.interval.value)||8,2,60); ui.interval.value=settings.interval; saveSettings(settings); markInteraction();});
   ui.transition.addEventListener("change", ()=>{settings.transition = clamp(parseFloat(ui.transition.value)||2.2,0.6,10); ui.transition.value=settings.transition; saveSettings(settings); markInteraction();});
   ui.particles.addEventListener("change", ()=>{
-    const v = clamp(parseInt(ui.particles.value||"18000",10), 2000, 80000);
+    const v = clamp(parseInt(ui.particles.value||"18000",10), 1, 80000);
     ui.particles.value = v;
     settings.maxParticles = v;
     saveSettings(settings);
@@ -244,6 +294,17 @@ export function initApp(){
   });
 
   ui.mode.addEventListener("change", ()=>{settings.mode = ui.mode.value; saveSettings(settings); refreshSlide(); markInteraction();});
+  ui.dither.addEventListener("change", ()=>{settings.dither = ui.dither.value; saveSettings(settings); refreshSlide(); markInteraction();});
+  ui.brightness.addEventListener("change", ()=>{settings.brightness = parseFloat(ui.brightness.value); saveSettings(settings); refreshSlide(); markInteraction();});
+  ui.contrast.addEventListener("change", ()=>{settings.contrast = parseFloat(ui.contrast.value); saveSettings(settings); refreshSlide(); markInteraction();});
+  ui.saturation.addEventListener("change", ()=>{settings.saturation = parseFloat(ui.saturation.value); saveSettings(settings); refreshSlide(); markInteraction();});
+  ui.gamma.addEventListener("change", ()=>{settings.gamma = parseFloat(ui.gamma.value); saveSettings(settings); refreshSlide(); markInteraction();});
+  ui.oscMode.addEventListener("change", ()=>{
+    settings.oscMode = ui.oscMode.value;
+    material.uniforms.uOscMode.value = settings.oscMode === "grid" ? 1 : settings.oscMode === "radial" ? 2 : 0;
+    saveSettings(settings);
+    markInteraction();
+  });
   ui.blend.addEventListener("change", ()=>{settings.blend = ui.blend.value; saveSettings(settings); applyBlend(); markInteraction();});
 
   let geometry = null;

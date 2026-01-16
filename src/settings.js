@@ -10,6 +10,16 @@ export const DEFAULTS = {
   jitter: 0.55,
   mode: "auto",
   blend: "add",
+  dither: "none",
+  ditherStrength: 0.35,
+  brightness: 0,
+  contrast: 1,
+  saturation: 1,
+  gamma: 1,
+  oscMode: "none",
+  oscAmplitude: 0,
+  oscFrequency: 3,
+  oscSpeed: 1.2,
 };
 
 export function loadSettings(){

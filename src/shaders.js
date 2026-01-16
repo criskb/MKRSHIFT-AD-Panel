@@ -16,6 +16,10 @@ export const VERT = `
   uniform float uDpr;
   uniform float uSwirl;
   uniform float uJitter;
+  uniform float uOscAmplitude;
+  uniform float uOscFrequency;
+  uniform float uOscSpeed;
+  uniform float uOscMode;
 
   varying vec3 vColor;
   varying float vAlpha;
@@ -40,6 +44,20 @@ export const VERT = `
     pos.x += sin(uTime*1.7 + aSeed*6.1) * j;
     pos.y += cos(uTime*1.3 + aSeed*5.3) * j;
     pos.z += sin(uTime*1.1 + aSeed*4.7) * (j*0.55);
+
+    if(uOscAmplitude > 0.0){
+      float phase = uTime * uOscSpeed;
+      if(uOscMode < 0.5){
+        // none
+      } else if(uOscMode < 1.5){
+        float gridWave = sin((pos.x + pos.y) * uOscFrequency + phase);
+        pos.z += gridWave * uOscAmplitude * 0.35;
+      } else {
+        float r = length(pos.xy);
+        float wave = sin(r * uOscFrequency - phase);
+        pos.z += wave * uOscAmplitude * 0.45;
+      }
+    }
 
     pos.xy *= uScale;
 
