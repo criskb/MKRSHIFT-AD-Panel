@@ -200,8 +200,10 @@ export function initApp(){
     syncUIFromSettings(ui, settings);
     updateHalftoneVisibility(ui, settings);
     updateMotionVisibility(ui, settings);
+    updatePipelineVisibility(ui, settings);
     updateSizeVariance();
     rebuildParticles();
+    updateRenderMode();
     timeline.render();
     nextAuto = nowS() + getSlideDuration(slides[currentSlideIndex]);
     markInteraction();
