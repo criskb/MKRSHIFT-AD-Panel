@@ -145,19 +145,23 @@
         </div>
       </div>
 
-      <div class="row">
-        <label>Swirl</label>
-        <div class="ctl">
-          <input id="swirl" type="range" min="0" max="6" step="0.1" value="2.2" />
-          <span id="swirlVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">2.2</span>
+      <div id="motionSwirl">
+        <div class="row">
+          <label>Swirl</label>
+          <div class="ctl">
+            <input id="swirl" type="range" min="0" max="6" step="0.1" value="2.2" />
+            <span id="swirlVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">2.2</span>
+          </div>
         </div>
       </div>
 
-      <div class="row">
-        <label>Jitter</label>
-        <div class="ctl">
-          <input id="jitter" type="range" min="0" max="2.5" step="0.05" value="0.55" />
-          <span id="jitterVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">0.55</span>
+      <div id="motionJitter">
+        <div class="row">
+          <label>Jitter</label>
+          <div class="ctl">
+            <input id="jitter" type="range" min="0" max="2.5" step="0.05" value="0" />
+            <span id="jitterVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">0</span>
+          </div>
         </div>
       </div>
 
@@ -250,37 +254,52 @@
       <div class="section-title">Motion</div>
 
       <div class="row">
-        <label>Oscillation</label>
+        <label>Animation effect</label>
         <div class="ctl">
-          <select id="oscMode">
+          <select id="animEffect">
+            <option value="all">All</option>
+            <option value="swirl">Swirl</option>
+            <option value="jitter">Jitter</option>
+            <option value="oscillation">Oscillation</option>
             <option value="none">None</option>
-            <option value="grid">Grid</option>
-            <option value="radial">Radial</option>
           </select>
         </div>
       </div>
 
-      <div class="row">
-        <label>Osc amplitude</label>
-        <div class="ctl">
-          <input id="oscAmplitude" type="range" min="0" max="6" step="0.05" value="0" />
-          <span id="oscAmplitudeVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">0</span>
+      <div id="motionOsc">
+        <div class="row">
+          <label>Oscillation</label>
+          <div class="ctl">
+            <select id="oscMode">
+              <option value="none">None</option>
+              <option value="grid">Grid</option>
+              <option value="radial">Radial</option>
+            </select>
+          </div>
         </div>
-      </div>
 
-      <div class="row">
-        <label>Osc frequency</label>
-        <div class="ctl">
-          <input id="oscFrequency" type="range" min="0.5" max="12" step="0.1" value="3" />
-          <span id="oscFrequencyVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">3</span>
+        <div class="row">
+          <label>Osc amplitude</label>
+          <div class="ctl">
+            <input id="oscAmplitude" type="range" min="0" max="6" step="0.05" value="0" />
+            <span id="oscAmplitudeVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">0</span>
+          </div>
         </div>
-      </div>
 
-      <div class="row">
-        <label>Osc speed</label>
-        <div class="ctl">
-          <input id="oscSpeed" type="range" min="0" max="6" step="0.05" value="1.2" />
-          <span id="oscSpeedVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">1.2</span>
+        <div class="row">
+          <label>Osc frequency</label>
+          <div class="ctl">
+            <input id="oscFrequency" type="range" min="0.5" max="12" step="0.1" value="3" />
+            <span id="oscFrequencyVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">3</span>
+          </div>
+        </div>
+
+        <div class="row">
+          <label>Osc speed</label>
+          <div class="ctl">
+            <input id="oscSpeed" type="range" min="0" max="6" step="0.05" value="1.2" />
+            <span id="oscSpeedVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">1.2</span>
+          </div>
         </div>
       </div>
 

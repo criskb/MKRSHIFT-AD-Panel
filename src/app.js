@@ -77,6 +77,10 @@ export function initApp(){
     oscFrequencyVal: el("oscFrequencyVal"),
     oscSpeed: el("oscSpeed"),
     oscSpeedVal: el("oscSpeedVal"),
+    animEffect: el("animEffect"),
+    motionSwirl: el("motionSwirl"),
+    motionJitter: el("motionJitter"),
+    motionOsc: el("motionOsc"),
     file: el("file"),
     btnAdd: el("btnAdd"),
     textTitle: el("textTitle"),
@@ -107,6 +111,7 @@ export function initApp(){
     "shape",
     "swirl",
     "jitter",
+    "animEffect",
     "oscMode",
     "oscAmplitude",
     "oscFrequency",
@@ -293,16 +298,21 @@ export function initApp(){
   }
 
   function applyRenderSettings(activeSettings){
+    const effect = activeSettings.animEffect ?? "all";
+    const useAll = effect === "all";
+    const useSwirl = useAll || effect === "swirl";
+    const useJitter = useAll || effect === "jitter";
+    const useOsc = useAll || effect === "oscillation";
     material.uniforms.uPointSize.value = activeSettings.dotSize;
     material.uniforms.uSoftness.value = activeSettings.softness;
-    material.uniforms.uSwirl.value = activeSettings.swirl;
-    material.uniforms.uJitter.value = activeSettings.jitter;
-    material.uniforms.uOscAmplitude.value = activeSettings.oscAmplitude;
+    material.uniforms.uSwirl.value = useSwirl ? activeSettings.swirl : 0;
+    material.uniforms.uJitter.value = useJitter ? activeSettings.jitter : 0;
+    material.uniforms.uOscAmplitude.value = useOsc ? activeSettings.oscAmplitude : 0;
     material.uniforms.uOscFrequency.value = activeSettings.oscFrequency;
     material.uniforms.uOscSpeed.value = activeSettings.oscSpeed;
-    material.uniforms.uOscMode.value = activeSettings.oscMode === "grid"
+    material.uniforms.uOscMode.value = useOsc && activeSettings.oscMode === "grid"
       ? 1
-      : activeSettings.oscMode === "radial"
+      : useOsc && activeSettings.oscMode === "radial"
         ? 2
         : 0;
     material.uniforms.uShape.value = activeSettings.shape === "square"
@@ -349,6 +359,7 @@ export function initApp(){
     ui.blend.value = settings.blend;
     ui.dither.value = settings.dither;
     ui.shape.value = settings.shape;
+    ui.animEffect.value = settings.animEffect;
     ui.dotsize.value = settings.dotSize;
     ui.dotsizeVal.textContent = String(settings.dotSize);
     ui.sizeVariance.value = settings.sizeVariance;
@@ -382,6 +393,7 @@ export function initApp(){
     ui.oscSpeed.value = settings.oscSpeed;
     ui.oscSpeedVal.textContent = String(settings.oscSpeed);
     updateHalftoneVisibility();
+    updateMotionVisibility();
   }
 
   bindRange(ui.dotsize, ui.dotsizeVal, "dotSize", ()=>{
@@ -402,6 +414,13 @@ export function initApp(){
     applyRenderSettings(getEffectiveSettings(currentSlide));
     markInteraction();
   });
+  ui.animEffect.addEventListener("change", ()=>{
+    settings.animEffect = ui.animEffect.value;
+    saveSettings(settings);
+    updateMotionVisibility();
+    applyRenderSettings(getEffectiveSettings(currentSlide));
+    markInteraction();
+  });
   bindRange(ui.ditherStrength, ui.ditherStrengthVal, "ditherStrength", ()=>{ refreshSlide(true); });
   bindRange(ui.brightness, ui.brightnessVal, "brightness", ()=>{ refreshSlide(true); });
   bindRange(ui.contrast, ui.contrastVal, "contrast", ()=>{ refreshSlide(true); });
@@ -417,6 +436,19 @@ export function initApp(){
     if(!ui.halftoneSettings) return;
     const isGrid = (settings.mode === "grid");
     ui.halftoneSettings.classList.toggle("is-hidden", !isGrid);
+  }
+
+  function updateMotionVisibility(){
+    const effect = settings.animEffect ?? "all";
+    if(ui.motionSwirl){
+      ui.motionSwirl.classList.toggle("is-hidden", !(effect === "all" || effect === "swirl"));
+    }
+    if(ui.motionJitter){
+      ui.motionJitter.classList.toggle("is-hidden", !(effect === "all" || effect === "jitter"));
+    }
+    if(ui.motionOsc){
+      ui.motionOsc.classList.toggle("is-hidden", !(effect === "all" || effect === "oscillation"));
+    }
   }
 
   ui.gridSize.addEventListener("input", ()=>{
@@ -562,6 +594,12 @@ export function initApp(){
     if(!mediaPool) return;
     if(img.dataset?.attached === "true") return;
     img.dataset.attached = "true";
+    img.style.position = "absolute";
+    img.style.left = "0";
+    img.style.top = "0";
+    img.style.width = "1px";
+    img.style.height = "1px";
+    img.style.opacity = "0";
     mediaPool.appendChild(img);
   }
 
@@ -744,6 +782,17 @@ export function initApp(){
             { value: "square", label: "Square" },
             { value: "diamond", label: "Diamond" },
             { value: "pixel", label: "Pixel" },
+          ],
+        },
+        {
+          key: "animEffect",
+          label: "Animation effect",
+          options: [
+            { value: "all", label: "All" },
+            { value: "swirl", label: "Swirl" },
+            { value: "jitter", label: "Jitter" },
+            { value: "oscillation", label: "Oscillation" },
+            { value: "none", label: "None" },
           ],
         },
         {
@@ -1166,11 +1215,11 @@ export function initApp(){
         ensureSlideId(slide);
         slides.push(slide);
       } else {
+        const animated = isGifFile(f);
         const [img, dataUrl] = await Promise.all([
-          loadImageFromFile(f),
+          loadImageFromFile(f, animated),
           readFileAsDataURL(f),
         ]);
-        const animated = isGifFile(f);
         if(animated){
           attachAnimatedImage(img);
         }
@@ -1193,13 +1242,13 @@ export function initApp(){
     renderTimeline();
   }
 
-  function loadImageFromFile(file){
+  function loadImageFromFile(file, keepAlive = false){
     return new Promise((resolve, reject)=>{
       const url = URL.createObjectURL(file);
       const img = new Image();
       img.loading = "eager";
-      img.onload = ()=>{ URL.revokeObjectURL(url); resolve(img); };
-      img.onerror = (e)=>{ URL.revokeObjectURL(url); reject(e); };
+      img.onload = ()=>{ if(!keepAlive) URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = (e)=>{ if(!keepAlive) URL.revokeObjectURL(url); reject(e); };
       img.src = url;
     });
   }
