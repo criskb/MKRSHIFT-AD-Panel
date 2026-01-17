@@ -10,6 +10,7 @@ export function initApp(){
 
   const el = (id) => document.getElementById(id);
   const panel = el("panel");
+  const mediaPool = el("mediaPool");
   const btnClose = el("btnClose");
   const btnFullscreen = el("btnFullscreen");
   const btnHide = el("btnHide");
@@ -483,6 +484,7 @@ export function initApp(){
     settings.oscMode = ui.oscMode.value;
     applyRenderSettings(getEffectiveSettings(currentSlide));
     saveSettings(settings);
+    applyRenderSettings(getEffectiveSettings(currentSlide));
     markInteraction();
   });
   ui.blend.addEventListener("change", ()=>{
@@ -524,6 +526,13 @@ export function initApp(){
       overrides[key] = settings[key];
     }
     return overrides;
+  }
+
+  function attachAnimatedImage(img){
+    if(!mediaPool) return;
+    if(img.dataset?.attached === "true") return;
+    img.dataset.attached = "true";
+    mediaPool.appendChild(img);
   }
 
   function updateTimelineActive(){
@@ -928,10 +937,11 @@ export function initApp(){
     geometry.attributes.position.needsUpdate = true;
   }
 
-  function writeInstantFromSample(sample){
+  function writeInstantFromSample(sample, options = {}){
     const N = settings.maxParticles;
     const M = sample.count;
     const sampleAlpha = sample.alpha;
+    const lockColor = Boolean(options.lockColor);
     for(let i=0;i<N;i++){
       const i3 = i*3;
       if(i < M){
@@ -941,11 +951,13 @@ export function initApp(){
         aEnd[i3+0] = px; aEnd[i3+1] = py; aEnd[i3+2] = pz;
         aStart[i3+0] = px; aStart[i3+1] = py; aStart[i3+2] = pz;
 
-        const cr = sample.col[i3+0];
-        const cg = sample.col[i3+1];
-        const cb = sample.col[i3+2];
-        aColorEnd[i3+0] = cr; aColorEnd[i3+1] = cg; aColorEnd[i3+2] = cb;
-        aColorStart[i3+0] = cr; aColorStart[i3+1] = cg; aColorStart[i3+2] = cb;
+        if(!lockColor){
+          const cr = sample.col[i3+0];
+          const cg = sample.col[i3+1];
+          const cb = sample.col[i3+2];
+          aColorEnd[i3+0] = cr; aColorEnd[i3+1] = cg; aColorEnd[i3+2] = cb;
+          aColorStart[i3+0] = cr; aColorStart[i3+1] = cg; aColorStart[i3+2] = cb;
+        }
 
         const alpha = sampleAlpha ? sampleAlpha[i] : 1;
         aAlphaEnd[i] = alpha;
@@ -959,8 +971,10 @@ export function initApp(){
         aEnd[i3+0] = px; aEnd[i3+1] = py; aEnd[i3+2] = pz;
         aStart[i3+0] = px; aStart[i3+1] = py; aStart[i3+2] = pz;
 
-        aColorEnd[i3+0] = 1; aColorEnd[i3+1] = 1; aColorEnd[i3+2] = 1;
-        aColorStart[i3+0] = 1; aColorStart[i3+1] = 1; aColorStart[i3+2] = 1;
+        if(!lockColor){
+          aColorEnd[i3+0] = 1; aColorEnd[i3+1] = 1; aColorEnd[i3+2] = 1;
+          aColorStart[i3+0] = 1; aColorStart[i3+1] = 1; aColorStart[i3+2] = 1;
+        }
 
         aAlphaEnd[i] = 0;
         aAlphaStart[i] = 0;
@@ -969,8 +983,10 @@ export function initApp(){
 
     geometry.attributes.aStart.needsUpdate = true;
     geometry.attributes.aEnd.needsUpdate = true;
-    geometry.attributes.aColorStart.needsUpdate = true;
-    geometry.attributes.aColorEnd.needsUpdate = true;
+    if(!lockColor){
+      geometry.attributes.aColorStart.needsUpdate = true;
+      geometry.attributes.aColorEnd.needsUpdate = true;
+    }
     geometry.attributes.aAlphaStart.needsUpdate = true;
     geometry.attributes.aAlphaEnd.needsUpdate = true;
     geometry.attributes.position.needsUpdate = true;
@@ -1036,6 +1052,7 @@ export function initApp(){
 
     bakeCurrentToStart();
     writeEndFromSample(sample);
+    slide.hasColorSampled = true;
 
     morphDur = getSlideTransition(slide);
     morphStart = t0;
@@ -1073,7 +1090,12 @@ export function initApp(){
     currentSlide = slide;
     currentImgAspect = sample.imgAspect;
     updateScaleUniform();
-    writeInstantFromSample(sample);
+    if(slide.lockColor && slide.hasColorSampled){
+      writeInstantFromSample(sample, { lockColor: true });
+    } else {
+      writeInstantFromSample(sample);
+      slide.hasColorSampled = true;
+    }
   }
 
   async function addFilesAsSlides(files){
@@ -1092,7 +1114,18 @@ export function initApp(){
           readFileAsDataURL(f),
         ]);
         const animated = isGifFile(f);
-        const slide = { type:"image", name: f.name, img, animated, dataUrl };
+        if(animated){
+          attachAnimatedImage(img);
+        }
+        const slide = {
+          type:"image",
+          name: f.name,
+          img,
+          animated,
+          dataUrl,
+          lockColor: animated,
+          hasColorSampled: false,
+        };
         ensureSlideId(slide);
         slides.push(slide);
       }
@@ -1106,6 +1139,7 @@ export function initApp(){
     return new Promise((resolve, reject)=>{
       const url = URL.createObjectURL(file);
       const img = new Image();
+      img.loading = "eager";
       img.onload = ()=>{ URL.revokeObjectURL(url); resolve(img); };
       img.onerror = (e)=>{ URL.revokeObjectURL(url); reject(e); };
       img.src = url;
@@ -1124,6 +1158,7 @@ export function initApp(){
   function loadImageFromDataUrl(dataUrl){
     return new Promise((resolve, reject)=>{
       const img = new Image();
+      img.loading = "eager";
       img.onload = () => resolve(img);
       img.onerror = (e) => reject(e);
       img.src = dataUrl;
@@ -1202,6 +1237,7 @@ export function initApp(){
         duration: slide.duration,
         transition: slide.transition,
         overrides: slide.overrides ?? null,
+        lockColor: slide.lockColor ?? null,
       };
       if(slide.type !== "text"){
         let dataUrl = slide.dataUrl;
@@ -1260,6 +1296,7 @@ export function initApp(){
               duration: slideData.duration,
               transition: slideData.transition,
               overrides: slideData.overrides ?? null,
+              lockColor: slideData.lockColor ?? null,
             };
             ensureSlideId(slide);
             loadedSlides.push(slide);
@@ -1268,15 +1305,21 @@ export function initApp(){
           if(slideData?.dataUrl){
             if(slideData.type === "image"){
               const img = await loadImageFromDataUrl(slideData.dataUrl);
+              const animated = slideData.dataUrl.startsWith("data:image/gif");
+              if(animated){
+                attachAnimatedImage(img);
+              }
               const slide = {
                 type: "image",
                 name: slideData.name,
                 img,
-                animated: slideData.dataUrl.startsWith("data:image/gif"),
+                animated,
                 dataUrl: slideData.dataUrl,
                 duration: slideData.duration,
                 transition: slideData.transition,
                 overrides: slideData.overrides ?? null,
+                lockColor: slideData.lockColor ?? animated,
+                hasColorSampled: false,
               };
               ensureSlideId(slide);
               loadedSlides.push(slide);
@@ -1291,6 +1334,7 @@ export function initApp(){
                 duration: slideData.duration,
                 transition: slideData.transition,
                 overrides: slideData.overrides ?? null,
+                lockColor: slideData.lockColor ?? null,
               };
               ensureSlideId(slide);
               loadedSlides.push(slide);

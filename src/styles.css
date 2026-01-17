@@ -8,6 +8,7 @@
 html,body{height:100%;margin:0;background:#000;overflow:hidden;font-family:ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;}
 #app{position:fixed;inset:0;}
 #halftoneCanvas{display:none;}
+#mediaPool{position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;}
 canvas{display:block;}
 
 /* Minimal kiosk UI */
