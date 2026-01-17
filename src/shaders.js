@@ -84,7 +84,9 @@ export const FRAG = `
     float d = length(uv);
 
     float edge = 0.5;
-    float a = 1.0 - smoothstep(edge - uSoftness, edge, d);
+    float aa = fwidth(d) * 1.25;
+    float softness = max(uSoftness, 0.0005);
+    float a = 1.0 - smoothstep(edge - softness - aa, edge + aa, d);
     a *= vAlpha;
     if(a < 0.01) discard;
 
