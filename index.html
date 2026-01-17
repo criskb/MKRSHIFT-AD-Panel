@@ -7,6 +7,7 @@
   </head>
   <body>
     <div id="app"></div>
+    <div id="mediaPool" aria-hidden="true"></div>
     <canvas id="halftoneCanvas" width="1" height="1" aria-hidden="true"></canvas>
 
     <div id="hud" aria-hidden="true">
@@ -26,6 +27,8 @@
       <div id="dropzone">Drop images/videos here (PNG/JPG/WebP/GIF/MP4/WebM) or use “Add Media”</div>
 
       <div class="divider"></div>
+
+      <div class="section-title">Playback</div>
 
       <div class="split">
         <button class="btn primary" id="btnFullscreen">Fullscreen</button>
@@ -63,11 +66,33 @@
         </div>
       </div>
 
+      <div class="section-title">Particles</div>
+
       <div class="row">
-        <label>Dot size</label>
+        <label>Particle size</label>
         <div class="ctl">
           <input id="dotsize" type="range" min="0.6" max="50" step="0.1" value="2.2" />
           <span id="dotsizeVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">2.2</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Size variance</label>
+        <div class="ctl">
+          <input id="sizeVariance" type="range" min="0" max="1" step="0.01" value="0.45" />
+          <span id="sizeVarianceVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">0.45</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Shape</label>
+        <div class="ctl">
+          <select id="shape">
+            <option value="dot">Dot</option>
+            <option value="square">Square</option>
+            <option value="diamond">Diamond</option>
+            <option value="pixel">Pixel</option>
+          </select>
         </div>
       </div>
 
@@ -120,19 +145,23 @@
         </div>
       </div>
 
-      <div class="row">
-        <label>Swirl</label>
-        <div class="ctl">
-          <input id="swirl" type="range" min="0" max="6" step="0.1" value="2.2" />
-          <span id="swirlVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">2.2</span>
+      <div id="motionSwirl">
+        <div class="row">
+          <label>Swirl</label>
+          <div class="ctl">
+            <input id="swirl" type="range" min="0" max="6" step="0.1" value="2.2" />
+            <span id="swirlVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">2.2</span>
+          </div>
         </div>
       </div>
 
-      <div class="row">
-        <label>Jitter</label>
-        <div class="ctl">
-          <input id="jitter" type="range" min="0" max="2.5" step="0.05" value="0.55" />
-          <span id="jitterVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">0.55</span>
+      <div id="motionJitter">
+        <div class="row">
+          <label>Jitter</label>
+          <div class="ctl">
+            <input id="jitter" type="range" min="0" max="2.5" step="0.05" value="0" />
+            <span id="jitterVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">0</span>
+          </div>
         </div>
       </div>
 
@@ -147,6 +176,8 @@
       </div>
 
       <div class="divider"></div>
+
+      <div class="section-title">Color & tone</div>
 
       <div class="row">
         <label>Brightness</label>
@@ -182,84 +213,99 @@
 
       <div class="divider"></div>
 
-      <div style="font-size:12px;color:var(--ui-tx-dim);margin:2px 0 6px">Halftone inputs</div>
+      <div class="section-title">Halftone</div>
 
-      <div class="row">
-        <label>Halftone image</label>
-        <div class="ctl">
-          <input id="fileUpload" type="file" accept="image/*" />
+      <div id="halftoneSettings">
+        <div class="row">
+          <label>Grid size</label>
+          <div class="ctl">
+            <input id="gridSize" type="range" min="2" max="80" step="1" value="16" />
+          </div>
         </div>
-      </div>
 
-      <div class="row">
-        <label>Grid size</label>
-        <div class="ctl">
-          <input id="gridSize" type="range" min="2" max="80" step="1" value="16" />
+        <div class="row">
+          <label>Smoothing</label>
+          <div class="ctl">
+            <input id="smoothing" type="range" min="0" max="1" step="0.01" value="0.35" />
+          </div>
         </div>
-      </div>
 
-      <div class="row">
-        <label>Smoothing</label>
-        <div class="ctl">
-          <input id="smoothing" type="range" min="0" max="1" step="0.01" value="0.35" />
-        </div>
-      </div>
-
-      <div class="row">
-        <label>Dither type</label>
-        <div class="ctl">
-          <select id="ditherType">
-            <option value="none">None</option>
-            <option value="bayer2">Bayer 2×2</option>
-            <option value="bayer4">Bayer 4×4</option>
-            <option value="random">Random</option>
-          </select>
+        <div class="row">
+          <label>Dither type</label>
+          <div class="ctl">
+            <select id="ditherType">
+              <option value="none">None</option>
+              <option value="bayer2">Bayer 2×2</option>
+              <option value="bayer4">Bayer 4×4</option>
+              <option value="random">Random</option>
+            </select>
+          </div>
         </div>
       </div>
 
       <div class="split">
         <button class="btn" id="resetButton">Reset</button>
-        <button class="btn primary" id="saveButton">Save</button>
+        <button class="btn primary" id="saveButton">Save Project</button>
+        <input id="projectFile" type="file" accept="application/json" style="display:none" />
       </div>
 
       <div class="divider"></div>
 
+      <div class="section-title">Motion</div>
+
       <div class="row">
-        <label>Oscillation</label>
+        <label>Animation effect</label>
         <div class="ctl">
-          <select id="oscMode">
+          <select id="animEffect">
+            <option value="all">All</option>
+            <option value="swirl">Swirl</option>
+            <option value="jitter">Jitter</option>
+            <option value="oscillation">Oscillation</option>
             <option value="none">None</option>
-            <option value="grid">Grid</option>
-            <option value="radial">Radial</option>
           </select>
         </div>
       </div>
 
-      <div class="row">
-        <label>Osc amplitude</label>
-        <div class="ctl">
-          <input id="oscAmplitude" type="range" min="0" max="6" step="0.05" value="0" />
-          <span id="oscAmplitudeVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">0</span>
+      <div id="motionOsc">
+        <div class="row">
+          <label>Oscillation</label>
+          <div class="ctl">
+            <select id="oscMode">
+              <option value="none">None</option>
+              <option value="grid">Grid</option>
+              <option value="radial">Radial</option>
+            </select>
+          </div>
         </div>
-      </div>
 
-      <div class="row">
-        <label>Osc frequency</label>
-        <div class="ctl">
-          <input id="oscFrequency" type="range" min="0.5" max="12" step="0.1" value="3" />
-          <span id="oscFrequencyVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">3</span>
+        <div class="row">
+          <label>Osc amplitude</label>
+          <div class="ctl">
+            <input id="oscAmplitude" type="range" min="0" max="6" step="0.05" value="0" />
+            <span id="oscAmplitudeVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">0</span>
+          </div>
         </div>
-      </div>
 
-      <div class="row">
-        <label>Osc speed</label>
-        <div class="ctl">
-          <input id="oscSpeed" type="range" min="0" max="6" step="0.05" value="1.2" />
-          <span id="oscSpeedVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">1.2</span>
+        <div class="row">
+          <label>Osc frequency</label>
+          <div class="ctl">
+            <input id="oscFrequency" type="range" min="0.5" max="12" step="0.1" value="3" />
+            <span id="oscFrequencyVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">3</span>
+          </div>
+        </div>
+
+        <div class="row">
+          <label>Osc speed</label>
+          <div class="ctl">
+            <input id="oscSpeed" type="range" min="0" max="6" step="0.05" value="1.2" />
+            <span id="oscSpeedVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">1.2</span>
+          </div>
         </div>
       </div>
 
       <div class="divider"></div>
+
+      <div class="section-title">Slides</div>
 
       <div class="row">
         <label>Add media</label>
@@ -287,10 +333,19 @@
         </div>
       </div>
 
+      <div class="row">
+        <label>Project</label>
+        <div class="ctl">
+          <button class="btn" id="btnLoadProject">Load Project</button>
+        </div>
+      </div>
+
       <div style="font-size:12px;color:var(--ui-tx-dim);line-height:1.35;margin-top:6px">
         Tip: use transparent PNGs (logos) for the cleanest “OpenAI ad” style. For kiosk mode, open with <b>?kiosk=1</b>.
       </div>
     </div>
+
+    <div id="timelineDock" aria-label="Playlist timeline"></div>
 
     <div id="watermark">Prompted by Cris K B • <b>MKRShift</b></div>
 

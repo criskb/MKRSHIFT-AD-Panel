@@ -78,13 +78,25 @@ export const FRAG = `
   varying float vAlpha;
 
   uniform float uSoftness;
+  uniform float uShape;
 
   void main(){
     vec2 uv = gl_PointCoord.xy - 0.5;
-    float d = length(uv);
+    float d = 0.0;
+    if(uShape < 0.5){
+      d = length(uv);
+    } else if(uShape < 1.5){
+      d = max(abs(uv.x), abs(uv.y));
+    } else if(uShape < 2.5){
+      d = abs(uv.x) + abs(uv.y);
+    } else {
+      d = max(abs(uv.x), abs(uv.y));
+    }
 
     float edge = 0.5;
-    float a = 1.0 - smoothstep(edge - uSoftness, edge, d);
+    float aa = fwidth(d) * 1.25;
+    float softness = (uShape > 2.5) ? 0.002 : max(uSoftness, 0.0005);
+    float a = 1.0 - smoothstep(edge - softness - aa, edge + aa, d);
     a *= vAlpha;
     if(a < 0.01) discard;
 
