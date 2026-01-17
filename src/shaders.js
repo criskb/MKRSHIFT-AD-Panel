@@ -125,6 +125,12 @@ export const MEDIA_FRAG = `
   uniform float uContrast;
   uniform float uSaturation;
   uniform float uGamma;
+  uniform float uVignette;
+  uniform float uGrain;
+  uniform float uSharpen;
+  uniform float uChromAb;
+  uniform float uTime;
+  uniform vec2 uResolution;
   varying vec2 vUv;
 
   vec3 applyTone(vec3 color){
@@ -137,9 +143,39 @@ export const MEDIA_FRAG = `
     return color;
   }
 
+  float rand(vec2 co){
+    return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
+  }
+
+  vec3 sharpen(sampler2D tex, vec2 uv, vec2 px, float amount){
+    vec3 c = texture2D(tex, uv).rgb;
+    vec3 n = texture2D(tex, uv + vec2(0.0, px.y)).rgb;
+    vec3 s = texture2D(tex, uv - vec2(0.0, px.y)).rgb;
+    vec3 e = texture2D(tex, uv + vec2(px.x, 0.0)).rgb;
+    vec3 w = texture2D(tex, uv - vec2(px.x, 0.0)).rgb;
+    vec3 edge = (n + s + e + w) * 0.25 - c;
+    return c - edge * amount;
+  }
+
   void main(){
-    vec4 tex = texture2D(uTexture, vUv);
-    vec3 color = applyTone(tex.rgb);
-    gl_FragColor = vec4(color, tex.a);
+    vec2 px = vec2(1.0 / uResolution.x, 1.0 / uResolution.y);
+
+    vec2 ca = (vUv - 0.5) * uChromAb;
+    vec3 col;
+    col.r = texture2D(uTexture, vUv + ca).r;
+    col.g = texture2D(uTexture, vUv).g;
+    col.b = texture2D(uTexture, vUv - ca).b;
+
+    col = mix(col, sharpen(uTexture, vUv, px, 1.0), uSharpen);
+    col = applyTone(col);
+
+    float d = distance(vUv, vec2(0.5));
+    float vig = smoothstep(0.8, 0.2, d);
+    col *= mix(1.0, vig, uVignette);
+
+    float g = rand(vUv * uTime) - 0.5;
+    col += g * uGrain * 0.08;
+
+    gl_FragColor = vec4(col, 1.0);
   }
 `;
