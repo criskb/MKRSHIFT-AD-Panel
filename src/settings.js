@@ -26,6 +26,7 @@ export const DEFAULTS = {
   oscFrequency: 3,
   oscSpeed: 1.2,
   animEffect: "all",
+  renderMode: "particles",
 };
 
 export function loadSettings(){

@@ -107,3 +107,39 @@ export const FRAG = `
     gl_FragColor = vec4(col, a);
   }
 `;
+
+export const MEDIA_VERT = `
+  precision highp float;
+  varying vec2 vUv;
+
+  void main(){
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+export const MEDIA_FRAG = `
+  precision highp float;
+  uniform sampler2D uTexture;
+  uniform float uBrightness;
+  uniform float uContrast;
+  uniform float uSaturation;
+  uniform float uGamma;
+  varying vec2 vUv;
+
+  vec3 applyTone(vec3 color){
+    color = (color - 0.5) * uContrast + 0.5 + uBrightness;
+    color = clamp(color, 0.0, 1.0);
+    float lum = dot(color, vec3(0.2126, 0.7152, 0.0722));
+    color = mix(vec3(lum), color, uSaturation);
+    float safeGamma = max(uGamma, 0.001);
+    color = pow(color, vec3(1.0 / safeGamma));
+    return color;
+  }
+
+  void main(){
+    vec4 tex = texture2D(uTexture, vUv);
+    vec3 color = applyTone(tex.rgb);
+    gl_FragColor = vec4(color, tex.a);
+  }
+`;

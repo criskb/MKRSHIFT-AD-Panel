@@ -29,11 +29,25 @@ export function updateMotionVisibility(ui, settings){
   }
 }
 
+export function updatePipelineVisibility(ui, settings){
+  const mediaMode = settings.renderMode === "media";
+  if(ui?.particleControls){
+    ui.particleControls.classList.toggle("is-hidden", mediaMode);
+  }
+  if(ui?.motionControls){
+    ui.motionControls.classList.toggle("is-hidden", mediaMode);
+  }
+  if(ui?.halftoneControls){
+    ui.halftoneControls.classList.toggle("is-hidden", mediaMode);
+  }
+}
+
 export function syncUIFromSettings(ui, settings){
   ui.autoplay.value = settings.autoplay ? "1" : "0";
   ui.interval.value = settings.interval;
   ui.transition.value = settings.transition;
   ui.particles.value = settings.maxParticles;
+  ui.renderMode.value = settings.renderMode;
   ui.mode.value = settings.mode;
   ui.blend.value = settings.blend;
   ui.dither.value = settings.dither;
