@@ -69,7 +69,7 @@
       <div class="section-title">Particles</div>
 
       <div class="row">
-        <label>Dot size</label>
+        <label>Particle size</label>
         <div class="ctl">
           <input id="dotsize" type="range" min="0.6" max="50" step="0.1" value="2.2" />
           <span id="dotsizeVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">2.2</span>
@@ -77,10 +77,22 @@
       </div>
 
       <div class="row">
-        <label>Dot size variance</label>
+        <label>Size variance</label>
         <div class="ctl">
           <input id="sizeVariance" type="range" min="0" max="1" step="0.01" value="0.45" />
           <span id="sizeVarianceVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">0.45</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Shape</label>
+        <div class="ctl">
+          <select id="shape">
+            <option value="dot">Dot</option>
+            <option value="square">Square</option>
+            <option value="diamond">Diamond</option>
+            <option value="pixel">Pixel</option>
+          </select>
         </div>
       </div>
 
@@ -199,29 +211,31 @@
 
       <div class="section-title">Halftone</div>
 
-      <div class="row">
-        <label>Grid size</label>
-        <div class="ctl">
-          <input id="gridSize" type="range" min="2" max="80" step="1" value="16" />
+      <div id="halftoneSettings">
+        <div class="row">
+          <label>Grid size</label>
+          <div class="ctl">
+            <input id="gridSize" type="range" min="2" max="80" step="1" value="16" />
+          </div>
         </div>
-      </div>
 
-      <div class="row">
-        <label>Smoothing</label>
-        <div class="ctl">
-          <input id="smoothing" type="range" min="0" max="1" step="0.01" value="0.35" />
+        <div class="row">
+          <label>Smoothing</label>
+          <div class="ctl">
+            <input id="smoothing" type="range" min="0" max="1" step="0.01" value="0.35" />
+          </div>
         </div>
-      </div>
 
-      <div class="row">
-        <label>Dither type</label>
-        <div class="ctl">
-          <select id="ditherType">
-            <option value="none">None</option>
-            <option value="bayer2">Bayer 2×2</option>
-            <option value="bayer4">Bayer 4×4</option>
-            <option value="random">Random</option>
-          </select>
+        <div class="row">
+          <label>Dither type</label>
+          <div class="ctl">
+            <select id="ditherType">
+              <option value="none">None</option>
+              <option value="bayer2">Bayer 2×2</option>
+              <option value="bayer4">Bayer 4×4</option>
+              <option value="random">Random</option>
+            </select>
+          </div>
         </div>
       </div>
 

@@ -5,6 +5,7 @@ export const DEFAULTS = {
   maxParticles: 18000,
   dotSize: 2.2,
   sizeVariance: 0.45,
+  shape: "dot",
   softness: 0.13,
   threshold: 0.62,
   swirl: 2.2,

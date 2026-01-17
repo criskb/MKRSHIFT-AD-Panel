@@ -47,6 +47,8 @@ canvas{display:block;}
   color:var(--ui-tx-dim);
 }
 
+.is-hidden{display:none;}
+
 .row{display:flex;gap:10px;align-items:center;justify-content:space-between;margin:8px 0;}
 .row label{font-size:12px;color:var(--ui-tx-dim);}
 .row .ctl{display:flex;gap:8px;align-items:center;justify-content:flex-end;}

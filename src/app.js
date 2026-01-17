@@ -44,6 +44,7 @@ export function initApp(){
     dotsizeVal: el("dotsizeVal"),
     sizeVariance: el("sizeVariance"),
     sizeVarianceVal: el("sizeVarianceVal"),
+    shape: el("shape"),
     softness: el("softness"),
     softnessVal: el("softnessVal"),
     mode: el("mode"),
@@ -68,6 +69,7 @@ export function initApp(){
     gridSize: el("gridSize"),
     smoothing: el("smoothing"),
     ditherType: el("ditherType"),
+    halftoneSettings: el("halftoneSettings"),
     oscMode: el("oscMode"),
     oscAmplitude: el("oscAmplitude"),
     oscAmplitudeVal: el("oscAmplitudeVal"),
@@ -102,6 +104,7 @@ export function initApp(){
     "saturation",
     "gamma",
     "blend",
+    "shape",
     "swirl",
     "jitter",
     "oscMode",
@@ -274,6 +277,7 @@ export function initApp(){
       uPointSize: { value: settings.dotSize },
       uDpr: { value: renderer.getPixelRatio() },
       uSoftness: { value: settings.softness },
+      uShape: { value: settings.shape === "square" ? 1 : settings.shape === "diamond" ? 2 : settings.shape === "pixel" ? 3 : 0 },
       uSwirl: { value: settings.swirl },
       uJitter: { value: settings.jitter },
       uOscAmplitude: { value: settings.oscAmplitude },
@@ -301,6 +305,13 @@ export function initApp(){
       : activeSettings.oscMode === "radial"
         ? 2
         : 0;
+    material.uniforms.uShape.value = activeSettings.shape === "square"
+      ? 1
+      : activeSettings.shape === "diamond"
+        ? 2
+        : activeSettings.shape === "pixel"
+          ? 3
+          : 0;
     applyBlend(activeSettings.blend);
   }
 
@@ -337,6 +348,7 @@ export function initApp(){
     ui.mode.value = settings.mode;
     ui.blend.value = settings.blend;
     ui.dither.value = settings.dither;
+    ui.shape.value = settings.shape;
     ui.dotsize.value = settings.dotSize;
     ui.dotsizeVal.textContent = String(settings.dotSize);
     ui.sizeVariance.value = settings.sizeVariance;
@@ -369,6 +381,7 @@ export function initApp(){
     ui.oscFrequencyVal.textContent = String(settings.oscFrequency);
     ui.oscSpeed.value = settings.oscSpeed;
     ui.oscSpeedVal.textContent = String(settings.oscSpeed);
+    updateHalftoneVisibility();
   }
 
   bindRange(ui.dotsize, ui.dotsizeVal, "dotSize", ()=>{
@@ -383,6 +396,12 @@ export function initApp(){
   bindRange(ui.threshold, ui.thresholdVal, "threshold", ()=>{});
   bindRange(ui.swirl, ui.swirlVal, "swirl", ()=> applyRenderSettings(getEffectiveSettings(currentSlide)));
   bindRange(ui.jitter, ui.jitterVal, "jitter", ()=> applyRenderSettings(getEffectiveSettings(currentSlide)));
+  ui.shape.addEventListener("change", ()=>{
+    settings.shape = ui.shape.value;
+    saveSettings(settings);
+    applyRenderSettings(getEffectiveSettings(currentSlide));
+    markInteraction();
+  });
   bindRange(ui.ditherStrength, ui.ditherStrengthVal, "ditherStrength", ()=>{ refreshSlide(true); });
   bindRange(ui.brightness, ui.brightnessVal, "brightness", ()=>{ refreshSlide(true); });
   bindRange(ui.contrast, ui.contrastVal, "contrast", ()=>{ refreshSlide(true); });
@@ -393,6 +412,12 @@ export function initApp(){
   bindRange(ui.oscSpeed, ui.oscSpeedVal, "oscSpeed", ()=> applyRenderSettings(getEffectiveSettings(currentSlide)));
 
   syncUIFromSettings();
+
+  function updateHalftoneVisibility(){
+    if(!ui.halftoneSettings) return;
+    const isGrid = (settings.mode === "grid");
+    ui.halftoneSettings.classList.toggle("is-hidden", !isGrid);
+  }
 
   ui.gridSize.addEventListener("input", ()=>{
     settings.gridSize = clamp(parseInt(ui.gridSize.value || "16", 10), 2, 200);
@@ -474,7 +499,13 @@ export function initApp(){
     geometry.attributes.aSize.needsUpdate = true;
   }
 
-  ui.mode.addEventListener("change", ()=>{settings.mode = ui.mode.value; saveSettings(settings); refreshSlide(true); markInteraction();});
+  ui.mode.addEventListener("change", ()=>{
+    settings.mode = ui.mode.value;
+    saveSettings(settings);
+    updateHalftoneVisibility();
+    refreshSlide(true);
+    markInteraction();
+  });
   ui.dither.addEventListener("change", ()=>{settings.dither = ui.dither.value; saveSettings(settings); refreshSlide(true); markInteraction();});
   ui.brightness.addEventListener("change", ()=>{settings.brightness = parseFloat(ui.brightness.value); saveSettings(settings); refreshSlide(true); markInteraction();});
   ui.contrast.addEventListener("change", ()=>{settings.contrast = parseFloat(ui.contrast.value); saveSettings(settings); refreshSlide(true); markInteraction();});
@@ -689,7 +720,7 @@ export function initApp(){
       details.appendChild(createLabeledInput("Transition (sec)", transitionInput));
 
       const controlFields = [
-        { key: "dotSize", label: "Dot size", type: "range", min: 0.6, max: 50, step: 0.1 },
+        { key: "dotSize", label: "Particle size", type: "range", min: 0.6, max: 50, step: 0.1 },
         { key: "softness", label: "Sharpness", type: "range", min: 0.02, max: 0.35, step: 0.01 },
         { key: "threshold", label: "Threshold", type: "range", min: 0.05, max: 0.95, step: 0.01 },
         { key: "ditherStrength", label: "Dither strength", type: "range", min: 0, max: 1, step: 0.01 },
@@ -705,6 +736,16 @@ export function initApp(){
       ];
 
       const selects = [
+        {
+          key: "shape",
+          label: "Shape",
+          options: [
+            { value: "dot", label: "Dot" },
+            { value: "square", label: "Square" },
+            { value: "diamond", label: "Diamond" },
+            { value: "pixel", label: "Pixel" },
+          ],
+        },
         {
           key: "mode",
           label: "Sampling mode",
@@ -952,6 +993,7 @@ export function initApp(){
     const M = sample.count;
     const sampleAlpha = sample.alpha;
     const lockColor = Boolean(options.lockColor);
+    const keepMissing = Boolean(options.keepMissing);
     for(let i=0;i<N;i++){
       const i3 = i*3;
       if(i < M){
@@ -978,16 +1020,20 @@ export function initApp(){
         const px = Math.cos(a)*r;
         const py = Math.sin(a)*r;
         const pz = (Math.random()*2-1)*0.12;
-        aEnd[i3+0] = px; aEnd[i3+1] = py; aEnd[i3+2] = pz;
-        aStart[i3+0] = px; aStart[i3+1] = py; aStart[i3+2] = pz;
+        if(!keepMissing){
+          aEnd[i3+0] = px; aEnd[i3+1] = py; aEnd[i3+2] = pz;
+          aStart[i3+0] = px; aStart[i3+1] = py; aStart[i3+2] = pz;
+        }
 
         if(!lockColor){
           aColorEnd[i3+0] = 1; aColorEnd[i3+1] = 1; aColorEnd[i3+2] = 1;
           aColorStart[i3+0] = 1; aColorStart[i3+1] = 1; aColorStart[i3+2] = 1;
         }
 
-        aAlphaEnd[i] = 0;
-        aAlphaStart[i] = 0;
+        if(!keepMissing){
+          aAlphaEnd[i] = 0;
+          aAlphaStart[i] = 0;
+        }
       }
     }
 
@@ -1101,9 +1147,9 @@ export function initApp(){
     currentImgAspect = sample.imgAspect;
     updateScaleUniform();
     if(slide.lockColor && slide.hasColorSampled){
-      writeInstantFromSample(sample, { lockColor: true });
+      writeInstantFromSample(sample, { lockColor: true, keepMissing: slide.stableSample });
     } else {
-      writeInstantFromSample(sample);
+      writeInstantFromSample(sample, { keepMissing: slide.stableSample });
       slide.hasColorSampled = true;
     }
   }
@@ -1252,6 +1298,7 @@ export function initApp(){
         transition: slide.transition,
         overrides: slide.overrides ?? null,
         lockColor: slide.lockColor ?? null,
+        stableSample: slide.stableSample ?? null,
       };
       if(slide.type !== "text"){
         let dataUrl = slide.dataUrl;
@@ -1331,11 +1378,11 @@ export function initApp(){
                 dataUrl: slideData.dataUrl,
                 duration: slideData.duration,
                 transition: slideData.transition,
-                overrides: slideData.overrides ?? null,
-                lockColor: slideData.lockColor ?? animated,
-                hasColorSampled: false,
-                stableSample: animated,
-              };
+              overrides: slideData.overrides ?? null,
+              lockColor: slideData.lockColor ?? animated,
+              hasColorSampled: false,
+              stableSample: slideData.stableSample ?? animated,
+            };
               ensureSlideId(slide);
               loadedSlides.push(slide);
             } else if(slideData.type === "video"){
