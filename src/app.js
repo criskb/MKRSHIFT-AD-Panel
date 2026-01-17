@@ -560,6 +560,7 @@ export function initApp(){
     settings.oscMode = ui.oscMode.value;
     applyRenderSettings(getEffectiveSettings(currentSlide));
     saveSettings(settings);
+    applyRenderSettings(getEffectiveSettings(currentSlide));
     markInteraction();
   });
   ui.blend.addEventListener("change", ()=>{
@@ -1093,6 +1094,144 @@ export function initApp(){
       currentSlideIndex = 0;
       rebuildParticles();
       timeline.render();
+      nextAuto = nowS() + getSlideDuration(slides[currentSlideIndex]);
+      toast("Project loaded");
+    } catch(err){
+      console.error(err);
+      toast("Failed to load project");
+    }
+  }
+
+  async function buildProjectPayload(){
+    const slidePayloads = [];
+    for(const slide of slides){
+      const base = {
+        id: slide.id,
+        type: slide.type,
+        name: slide.name,
+        title: slide.title,
+        sub: slide.sub,
+        duration: slide.duration,
+        transition: slide.transition,
+        overrides: slide.overrides ?? null,
+        lockColor: slide.lockColor ?? null,
+        stableSample: slide.stableSample ?? null,
+      };
+      if(slide.type !== "text"){
+        let dataUrl = slide.dataUrl;
+        if(!dataUrl && slide.type === "image" && slide.img?.src?.startsWith("data:")){
+          dataUrl = slide.img.src;
+        }
+        if(!dataUrl && slide.type === "video" && slide.video?.src?.startsWith("data:")){
+          dataUrl = slide.video.src;
+        }
+        base.dataUrl = dataUrl ?? null;
+      }
+      slidePayloads.push(base);
+    }
+    return {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      settings: { ...settings },
+      slides: slidePayloads,
+    };
+  }
+
+  async function saveProject(){
+    try{
+      const payload = await buildProjectPayload();
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `dotscreen-project-${Date.now()}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast("Project saved");
+    } catch(err){
+      console.error(err);
+      toast("Failed to save project");
+    }
+  }
+
+  async function loadProjectFromFile(file){
+    try{
+      const raw = await file.text();
+      const data = JSON.parse(raw);
+      if(data?.settings){
+        Object.assign(settings, DEFAULTS, data.settings);
+        saveSettings(settings);
+        syncUIFromSettings();
+      }
+      const loadedSlides = [];
+      if(Array.isArray(data?.slides)){
+        for(const slideData of data.slides){
+          if(slideData?.type === "text"){
+            const slide = {
+              type: "text",
+              title: slideData.title || "Text slide",
+              sub: slideData.sub || "",
+              duration: slideData.duration,
+              transition: slideData.transition,
+              overrides: slideData.overrides ?? null,
+              lockColor: slideData.lockColor ?? null,
+            };
+            ensureSlideId(slide);
+            loadedSlides.push(slide);
+            continue;
+          }
+          if(slideData?.dataUrl){
+            if(slideData.type === "image"){
+              const img = await loadImageFromDataUrl(slideData.dataUrl);
+              const animated = slideData.dataUrl.startsWith("data:image/gif");
+              if(animated){
+                attachAnimatedImage(img);
+              }
+              const slide = {
+                type: "image",
+                name: slideData.name,
+                img,
+                animated,
+                dataUrl: slideData.dataUrl,
+                duration: slideData.duration,
+                transition: slideData.transition,
+              overrides: slideData.overrides ?? null,
+              lockColor: slideData.lockColor ?? animated,
+              hasColorSampled: false,
+              stableSample: slideData.stableSample ?? animated,
+            };
+              ensureSlideId(slide);
+              loadedSlides.push(slide);
+            } else if(slideData.type === "video"){
+              const video = await loadVideoFromDataUrl(slideData.dataUrl);
+              attachAnimatedVideo(video);
+              const slide = {
+                type: "video",
+                name: slideData.name,
+                video,
+                animated: true,
+                dataUrl: slideData.dataUrl,
+                duration: slideData.duration,
+                transition: slideData.transition,
+                overrides: slideData.overrides ?? null,
+                lockColor: slideData.lockColor ?? null,
+              };
+              ensureSlideId(slide);
+              loadedSlides.push(slide);
+            }
+          }
+        }
+      }
+
+      if(!loadedSlides.length){
+        toast("No slides found in project");
+        return;
+      }
+
+      slides = loadedSlides;
+      currentSlideIndex = 0;
+      rebuildParticles();
+      renderTimeline();
       nextAuto = nowS() + getSlideDuration(slides[currentSlideIndex]);
       toast("Project loaded");
     } catch(err){
