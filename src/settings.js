@@ -27,6 +27,14 @@ export const DEFAULTS = {
   oscSpeed: 1.2,
   animEffect: "all",
   renderMode: "particles",
+  pipeline: "none",
+  bloomStrength: 0.7,
+  trailDamp: 0.9,
+  grain: 0.12,
+  vignette: 0.3,
+  sharpen: 0.15,
+  chromSplit: 0.0015,
+  transitionSoftness: 0.2,
 };
 
 export function loadSettings(){

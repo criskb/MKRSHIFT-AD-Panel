@@ -2,6 +2,8 @@ import * as THREE from "three";
 import { clamp, lerp, ease, nowS, mulberry32 } from "./utils.js";
 import { loadSettings, saveSettings, DEFAULTS } from "./settings.js";
 import { VERT, FRAG, MEDIA_VERT, MEDIA_FRAG } from "./shaders.js";
+import { PostFXManager } from "./postfx/PostFXManager.js";
+import { createTransitionMaterial } from "./postfx/TransitionPass.js";
 import { sampleCanvasToParticles } from "./sampling.js";
 import { makeTextCanvas, makeImageCanvas, makeVideoCanvas } from "./slideCanvas.js";
 import {
@@ -60,6 +62,7 @@ export function initApp(){
     interval: el("interval"),
     transition: el("transition"),
     renderMode: el("renderMode"),
+    pipeline: el("pipeline"),
     particles: el("particles"),
     dotsize: el("dotsize"),
     dotsizeVal: el("dotsizeVal"),
@@ -87,6 +90,20 @@ export function initApp(){
     saturationVal: el("saturationVal"),
     gamma: el("gamma"),
     gammaVal: el("gammaVal"),
+    bloomStrength: el("bloomStrength"),
+    bloomStrengthVal: el("bloomStrengthVal"),
+    trailDamp: el("trailDamp"),
+    trailDampVal: el("trailDampVal"),
+    vignette: el("vignette"),
+    vignetteVal: el("vignetteVal"),
+    grain: el("grain"),
+    grainVal: el("grainVal"),
+    sharpen: el("sharpen"),
+    sharpenVal: el("sharpenVal"),
+    chromSplit: el("chromSplit"),
+    chromSplitVal: el("chromSplitVal"),
+    transitionSoftness: el("transitionSoftness"),
+    transitionSoftnessVal: el("transitionSoftnessVal"),
     gridSize: el("gridSize"),
     smoothing: el("smoothing"),
     ditherType: el("ditherType"),
@@ -204,6 +221,11 @@ export function initApp(){
     updateSizeVariance();
     rebuildParticles();
     updateRenderMode();
+    postFX.settings.bloom.strength = settings.bloomStrength;
+    postFX.settings.afterimage.damp = settings.trailDamp;
+    postFX.setMode(settings.pipeline);
+    transitionMat.uniforms.softness.value = settings.transitionSoftness;
+    transitionMat.uniforms.rgbSplit.value = settings.chromSplit;
     timeline.render();
     nextAuto = nowS() + getSlideDuration(slides[currentSlideIndex]);
     markInteraction();
@@ -277,12 +299,37 @@ export function initApp(){
   const container = document.getElementById("app");
   const renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:"high-performance" });
   renderer.setClearColor(0x000000, 1);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 3));
+  const DPR_CAP = 1.5;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, DPR_CAP));
   renderer.setSize(window.innerWidth, window.innerHeight);
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
   const camera = new THREE.OrthographicCamera(-1,1,1,-1,-1000,1000);
+  const postFX = new PostFXManager(renderer, scene, camera);
+  postFX.settings.bloom.strength = settings.bloomStrength;
+  postFX.settings.afterimage.damp = settings.trailDamp;
+  postFX.setMode(settings.pipeline);
+
+  document.addEventListener("visibilitychange", () => {
+    postFX.enabled = !document.hidden && postFX.mode !== "none";
+  });
+
+  const transitionScene = new THREE.Scene();
+  const transitionCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  const transitionMat = createTransitionMaterial();
+  transitionMat.uniforms.softness.value = settings.transitionSoftness;
+  transitionMat.uniforms.rgbSplit.value = settings.chromSplit;
+  const transitionQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), transitionMat);
+  transitionScene.add(transitionQuad);
+
+  const rtFrom = new THREE.WebGLRenderTarget(1, 1, { depthBuffer: false });
+  const rtTo = new THREE.WebGLRenderTarget(1, 1, { depthBuffer: false });
+  let transitionActive = false;
+  let transitionStart = 0;
+  let transitionDuration = settings.transition;
+  let transitionFromSlide = null;
+  let transitionToSlide = null;
 
   function updateCamera(){
     const w = window.innerWidth;
@@ -292,8 +339,13 @@ export function initApp(){
     camera.top = h/2;
     camera.bottom = -h/2;
     camera.updateProjectionMatrix();
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, DPR_CAP));
     renderer.setSize(w, h);
     material.uniforms.uDpr.value = renderer.getPixelRatio();
+    mediaMaterial.uniforms.uResolution.value.set(w, h);
+    postFX.setSize(w, h, renderer.getPixelRatio());
+    rtFrom.setSize(w, h);
+    rtTo.setSize(w, h);
     updateScaleUniform();
     updateMediaScale();
   }
@@ -331,6 +383,12 @@ export function initApp(){
       uContrast: { value: settings.contrast },
       uSaturation: { value: settings.saturation },
       uGamma: { value: settings.gamma },
+      uVignette: { value: settings.vignette },
+      uGrain: { value: settings.grain },
+      uSharpen: { value: settings.sharpen },
+      uChromAb: { value: settings.chromSplit },
+      uTime: { value: 0 },
+      uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
     },
   });
   const mediaMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mediaMaterial);
@@ -348,6 +406,10 @@ export function initApp(){
     mediaMaterial.uniforms.uContrast.value = activeSettings.contrast ?? 1;
     mediaMaterial.uniforms.uSaturation.value = activeSettings.saturation ?? 1;
     mediaMaterial.uniforms.uGamma.value = activeSettings.gamma ?? 1;
+    mediaMaterial.uniforms.uVignette.value = activeSettings.vignette ?? 0;
+    mediaMaterial.uniforms.uGrain.value = activeSettings.grain ?? 0;
+    mediaMaterial.uniforms.uSharpen.value = activeSettings.sharpen ?? 0;
+    mediaMaterial.uniforms.uChromAb.value = activeSettings.chromSplit ?? 0;
   }
 
   function applyRenderSettings(activeSettings){
@@ -422,6 +484,24 @@ export function initApp(){
   bindRange(ui.contrast, ui.contrastVal, settings, "contrast", saveSettings, ()=>{ refreshSlide(true); }, markInteraction);
   bindRange(ui.saturation, ui.saturationVal, settings, "saturation", saveSettings, ()=>{ refreshSlide(true); }, markInteraction);
   bindRange(ui.gamma, ui.gammaVal, settings, "gamma", saveSettings, ()=>{ refreshSlide(true); }, markInteraction);
+  bindRange(ui.bloomStrength, ui.bloomStrengthVal, settings, "bloomStrength", saveSettings, ()=> {
+    postFX.settings.bloom.strength = settings.bloomStrength;
+    postFX.rebuildChain();
+  }, markInteraction);
+  bindRange(ui.trailDamp, ui.trailDampVal, settings, "trailDamp", saveSettings, ()=> {
+    postFX.settings.afterimage.damp = settings.trailDamp;
+    postFX.rebuildChain();
+  }, markInteraction);
+  bindRange(ui.vignette, ui.vignetteVal, settings, "vignette", saveSettings, ()=>{ refreshSlide(true); }, markInteraction);
+  bindRange(ui.grain, ui.grainVal, settings, "grain", saveSettings, ()=>{ refreshSlide(true); }, markInteraction);
+  bindRange(ui.sharpen, ui.sharpenVal, settings, "sharpen", saveSettings, ()=>{ refreshSlide(true); }, markInteraction);
+  bindRange(ui.chromSplit, ui.chromSplitVal, settings, "chromSplit", saveSettings, ()=>{ 
+    transitionMat.uniforms.rgbSplit.value = settings.chromSplit;
+    refreshSlide(true);
+  }, markInteraction);
+  bindRange(ui.transitionSoftness, ui.transitionSoftnessVal, settings, "transitionSoftness", saveSettings, ()=> {
+    transitionMat.uniforms.softness.value = settings.transitionSoftness;
+  }, markInteraction);
   bindRange(ui.oscAmplitude, ui.oscAmplitudeVal, settings, "oscAmplitude", saveSettings, ()=> applyRenderSettings(getEffectiveSettings(currentSlide)), markInteraction);
   bindRange(ui.oscFrequency, ui.oscFrequencyVal, settings, "oscFrequency", saveSettings, ()=> applyRenderSettings(getEffectiveSettings(currentSlide)), markInteraction);
   bindRange(ui.oscSpeed, ui.oscSpeedVal, settings, "oscSpeed", saveSettings, ()=> applyRenderSettings(getEffectiveSettings(currentSlide)), markInteraction);
@@ -479,6 +559,13 @@ export function initApp(){
     saveSettings(settings);
     updatePipelineVisibility(ui, settings);
     updateRenderMode();
+    markInteraction();
+  });
+  ui.pipeline.addEventListener("change", ()=>{
+    settings.pipeline = ui.pipeline.value;
+    saveSettings(settings);
+    postFX.setMode(settings.pipeline);
+    postFX.enabled = !document.hidden && postFX.mode !== "none";
     markInteraction();
   });
   ui.particles.addEventListener("change", ()=>{
@@ -551,6 +638,7 @@ export function initApp(){
       points.visible = !mediaMode;
     }
     mediaMesh.visible = mediaMode;
+    transitionActive = false;
     if(!currentSlide) return;
     if(mediaMode){
       applySlideMedia(currentSlide);
@@ -818,16 +906,36 @@ export function initApp(){
     material.uniforms.uScale.value = scale;
   }
 
-  let mediaTexture = null;
-  function disposeMediaTexture(){
-    if(mediaTexture?.dispose){
-      mediaTexture.dispose();
+  function ensureSlideTexture(slide){
+    if(!slide) return null;
+    if(slide.texture) return slide.texture;
+    if(slide.type === "video" && slide.video){
+      const texture = new THREE.VideoTexture(slide.video);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.generateMipmaps = false;
+      slide.texture = texture;
+      return texture;
     }
-    mediaTexture = null;
+    if(slide.type === "image" && slide.img){
+      const texture = new THREE.Texture(slide.img);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.needsUpdate = true;
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      slide.texture = texture;
+      return texture;
+    }
+    const fallbackCanvas = makeTextCanvas(slide.title ?? "MKRShift", slide.sub ?? "");
+    const texture = new THREE.CanvasTexture(fallbackCanvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.needsUpdate = true;
+    slide.texture = texture;
+    return texture;
   }
 
   function setMediaTexture(texture){
-    mediaTexture = texture;
     mediaMaterial.uniforms.uTexture.value = texture;
   }
 
@@ -864,26 +972,7 @@ export function initApp(){
   }
 
   function setMediaSourceForSlide(slide){
-    disposeMediaTexture();
-    if(slide?.type === "video" && slide.video){
-      const texture = new THREE.VideoTexture(slide.video);
-      texture.minFilter = THREE.LinearFilter;
-      texture.magFilter = THREE.LinearFilter;
-      texture.generateMipmaps = false;
-      setMediaTexture(texture);
-      return;
-    }
-    if(slide?.type === "image" && slide.img){
-      const texture = new THREE.Texture(slide.img);
-      texture.needsUpdate = true;
-      texture.minFilter = THREE.LinearFilter;
-      texture.magFilter = THREE.LinearFilter;
-      setMediaTexture(texture);
-      return;
-    }
-    const fallbackCanvas = makeTextCanvas(slide?.title ?? "MKRShift", slide?.sub ?? "");
-    const texture = new THREE.CanvasTexture(fallbackCanvas);
-    texture.needsUpdate = true;
+    const texture = ensureSlideTexture(slide);
     setMediaTexture(texture);
   }
 
@@ -912,6 +1001,46 @@ export function initApp(){
     currentSlide = slide;
     currentImgAspect = getSlideAspect(slide);
     updateMediaScale();
+  }
+
+  function renderSlideToTarget(slide, target){
+    if(!slide) return;
+    const prevTexture = mediaMaterial.uniforms.uTexture.value;
+    const prevMediaVisible = mediaMesh.visible;
+    const prevPointsVisible = points?.visible;
+    const activeSettings = { ...getEffectiveSettings(slide), stableSample: slide.stableSample };
+
+    applyToneSettings(activeSettings);
+    setMediaSourceForSlide(slide);
+    mediaMesh.visible = true;
+    if(points) points.visible = false;
+
+    renderer.setRenderTarget(target);
+    renderer.clear(true, true, true);
+    renderer.render(scene, camera);
+    renderer.setRenderTarget(null);
+
+    mediaMaterial.uniforms.uTexture.value = prevTexture;
+    mediaMesh.visible = prevMediaVisible;
+    if(points) points.visible = prevPointsVisible;
+    if(currentSlide){
+      applyToneSettings(getEffectiveSettings(currentSlide));
+    }
+  }
+
+  function startMediaTransition(fromSlide, toSlide){
+    transitionActive = true;
+    transitionStart = nowS();
+    transitionDuration = getSlideTransition(toSlide);
+    transitionFromSlide = fromSlide;
+    transitionToSlide = toSlide;
+    renderSlideToTarget(fromSlide, rtFrom);
+    renderSlideToTarget(toSlide, rtTo);
+    transitionMat.uniforms.tFrom.value = rtFrom.texture;
+    transitionMat.uniforms.tTo.value = rtTo.texture;
+    transitionMat.uniforms.progress.value = 0;
+    transitionMat.uniforms.time.value = 0;
+    applySlideMedia(toSlide);
   }
 
   async function applySlide(slide){
@@ -1194,6 +1323,11 @@ export function initApp(){
     timeline.updateActive();
     const slide = slides[currentSlideIndex];
     nextAuto = nowS() + getSlideDuration(slide);
+    const mediaMode = settings.renderMode === "media";
+    if(mediaMode && !instant && currentSlide && currentSlide !== slide){
+      startMediaTransition(currentSlide, slide);
+      return;
+    }
     if(instant){
       void applySlideInstant(slide, true);
     } else {
@@ -1211,11 +1345,15 @@ export function initApp(){
 
   nextAuto = nowS() + getSlideDuration(slides[currentSlideIndex]);
 
+  const clock = new THREE.Clock();
+
   function tick(){
     requestAnimationFrame(tick);
 
     const t = nowS();
+    const dt = clock.getDelta();
     material.uniforms.uTime.value = t;
+    mediaMaterial.uniforms.uTime.value = t;
 
     if(currentSlide?.animated){
       if(currentSlide.type === "video"){
@@ -1226,8 +1364,8 @@ export function initApp(){
           lastAnimSample = t;
           void applySlideInstant(currentSlide, true);
         }
-      } else if(mediaTexture && !mediaTexture.isVideoTexture){
-        mediaTexture.needsUpdate = true;
+      } else if(currentSlide.texture && !currentSlide.texture.isVideoTexture){
+        currentSlide.texture.needsUpdate = true;
       }
     }
 
@@ -1254,7 +1392,22 @@ export function initApp(){
     }
 
     maybeAutoHideUI();
-    renderer.render(scene, camera);
+    if(transitionActive && settings.renderMode === "media"){
+      const elapsed = t - transitionStart;
+      const progress = Math.min(1, elapsed / transitionDuration);
+      transitionMat.uniforms.progress.value = progress;
+      transitionMat.uniforms.time.value = elapsed;
+      renderer.setRenderTarget(null);
+      renderer.render(transitionScene, transitionCam);
+      if(progress >= 1){
+        transitionActive = false;
+        transitionFromSlide = null;
+        transitionToSlide = null;
+      }
+      return;
+    }
+
+    postFX.render(dt);
   }
 
   tick();
