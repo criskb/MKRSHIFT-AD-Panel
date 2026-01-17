@@ -72,6 +72,14 @@
       </div>
 
       <div class="row">
+        <label>Dot size variance</label>
+        <div class="ctl">
+          <input id="sizeVariance" type="range" min="0" max="1" step="0.01" value="0.45" />
+          <span id="sizeVarianceVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">0.45</span>
+        </div>
+      </div>
+
+      <div class="row">
         <label>Sharpness</label>
         <div class="ctl">
           <input id="softness" type="range" min="0.02" max="0.35" step="0.01" value="0.13" />
@@ -185,13 +193,6 @@
       <div style="font-size:12px;color:var(--ui-tx-dim);margin:2px 0 6px">Halftone inputs</div>
 
       <div class="row">
-        <label>Halftone image</label>
-        <div class="ctl">
-          <input id="fileUpload" type="file" accept="image/*" />
-        </div>
-      </div>
-
-      <div class="row">
         <label>Grid size</label>
         <div class="ctl">
           <input id="gridSize" type="range" min="2" max="80" step="1" value="16" />
@@ -219,7 +220,8 @@
 
       <div class="split">
         <button class="btn" id="resetButton">Reset</button>
-        <button class="btn primary" id="saveButton">Save</button>
+        <button class="btn primary" id="saveButton">Save Project</button>
+        <input id="projectFile" type="file" accept="application/json" style="display:none" />
       </div>
 
       <div class="divider"></div>
@@ -286,6 +288,17 @@
           <button class="btn" id="btnRemove">Remove</button>
         </div>
       </div>
+
+      <div class="divider"></div>
+
+      <div class="row">
+        <label>Timeline</label>
+        <div class="ctl">
+          <button class="btn" id="btnLoadProject">Load Project</button>
+        </div>
+      </div>
+
+      <div id="timeline"></div>
 
       <div style="font-size:12px;color:var(--ui-tx-dim);line-height:1.35;margin-top:6px">
         Tip: use transparent PNGs (logos) for the cleanest “OpenAI ad” style. For kiosk mode, open with <b>?kiosk=1</b>.
