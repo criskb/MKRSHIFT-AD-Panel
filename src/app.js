@@ -556,6 +556,11 @@ export function initApp(){
     material.uniforms.uScale.value = scale;
   }
 
+  function getVideoCanvas(slide){
+    slide.videoCanvas = makeVideoCanvas(slide.video, slide.videoCanvas);
+    return slide.videoCanvas;
+  }
+
   async function applySlide(slide){
     const t0 = nowS();
     let canvas = null;
@@ -565,7 +570,7 @@ export function initApp(){
     } else if(slide.type === "image"){
       canvas = await makeImageCanvas(slide.img);
     } else if(slide.type === "video"){
-      canvas = makeVideoCanvas(slide.video);
+      canvas = getVideoCanvas(slide);
     } else {
       canvas = makeTextCanvas("MKRShift", "");
     }
@@ -599,7 +604,7 @@ export function initApp(){
     } else if(slide.type === "image"){
       canvas = await makeImageCanvas(slide.img);
     } else if(slide.type === "video"){
-      canvas = makeVideoCanvas(slide.video);
+      canvas = getVideoCanvas(slide);
     } else {
       canvas = makeTextCanvas("MKRShift", "");
     }
