@@ -484,6 +484,7 @@ export function initApp(){
     settings.oscMode = ui.oscMode.value;
     applyRenderSettings(getEffectiveSettings(currentSlide));
     saveSettings(settings);
+    applyRenderSettings(getEffectiveSettings(currentSlide));
     markInteraction();
   });
   ui.blend.addEventListener("change", ()=>{
