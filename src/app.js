@@ -561,6 +561,19 @@ export function initApp(){
     return slide.videoCanvas;
   }
 
+  function sampleCanvasSafe(canvas, label){
+    try{
+      return sampleCanvasToParticles(canvas, settings);
+    } catch(err){
+      if(err?.name === "SecurityError"){
+        console.warn("Canvas readback blocked by CORS.", err);
+        toast(`Can't sample ${label} due to CORS. Use local files or serve with CORS headers.`);
+        return null;
+      }
+      throw err;
+    }
+  }
+
   async function applySlide(slide){
     const t0 = nowS();
     let canvas = null;
@@ -575,7 +588,12 @@ export function initApp(){
       canvas = makeTextCanvas("MKRShift", "");
     }
 
-    const sample = sampleCanvasToParticles(canvas, settings);
+    const label = slide.type === "video" ? `video "${slide.name ?? "clip"}"` : slide.type;
+    let sample = sampleCanvasSafe(canvas, label);
+    if(!sample){
+      const fallbackCanvas = makeTextCanvas("CORS blocked", "Use local files or same-origin video");
+      sample = sampleCanvasToParticles(fallbackCanvas, settings);
+    }
     currentSlide = slide;
     currentImgAspect = sample.imgAspect;
     updateScaleUniform();
@@ -608,7 +626,12 @@ export function initApp(){
     } else {
       canvas = makeTextCanvas("MKRShift", "");
     }
-    const sample = sampleCanvasToParticles(canvas, settings);
+    const label = slide.type === "video" ? `video "${slide.name ?? "clip"}"` : slide.type;
+    let sample = sampleCanvasSafe(canvas, label);
+    if(!sample){
+      const fallbackCanvas = makeTextCanvas("CORS blocked", "Use local files or same-origin video");
+      sample = sampleCanvasToParticles(fallbackCanvas, settings);
+    }
     currentSlide = slide;
     currentImgAspect = sample.imgAspect;
     updateScaleUniform();
@@ -644,6 +667,7 @@ export function initApp(){
     return new Promise((resolve, reject)=> {
       const url = URL.createObjectURL(file);
       const video = document.createElement("video");
+      video.crossOrigin = "anonymous";
       video.preload = "auto";
       video.muted = true;
       video.playsInline = true;
