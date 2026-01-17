@@ -87,7 +87,7 @@ export function initApp(){
     saveButton: el("saveButton"),
     btnLoadProject: el("btnLoadProject"),
     projectFile: el("projectFile"),
-    timeline: el("timeline"),
+    timeline: el("timelineDock"),
   };
 
   const SLIDE_OVERRIDE_KEYS = [
@@ -484,7 +484,6 @@ export function initApp(){
     settings.oscMode = ui.oscMode.value;
     applyRenderSettings(getEffectiveSettings(currentSlide));
     saveSettings(settings);
-    applyRenderSettings(getEffectiveSettings(currentSlide));
     markInteraction();
   });
   ui.blend.addEventListener("change", ()=>{
@@ -533,6 +532,17 @@ export function initApp(){
     if(img.dataset?.attached === "true") return;
     img.dataset.attached = "true";
     mediaPool.appendChild(img);
+  }
+
+  function attachAnimatedVideo(video){
+    if(!mediaPool) return;
+    if(video.dataset?.attached === "true") return;
+    video.dataset.attached = "true";
+    video.muted = true;
+    video.playsInline = true;
+    video.autoplay = true;
+    mediaPool.appendChild(video);
+    video.play().catch(()=>{});
   }
 
   function updateTimelineActive(){
@@ -1105,6 +1115,7 @@ export function initApp(){
           loadVideoFromFile(f),
           readFileAsDataURL(f),
         ]);
+        attachAnimatedVideo(video);
         const slide = { type:"video", name: f.name, video, animated: true, dataUrl };
         ensureSlideId(slide);
         slides.push(slide);
@@ -1173,6 +1184,7 @@ export function initApp(){
       video.muted = true;
       video.playsInline = true;
       video.loop = true;
+      video.autoplay = true;
       const onError = (e) => reject(e);
       const onSeeked = () => resolve(video);
       const onLoaded = () => {
@@ -1194,6 +1206,7 @@ export function initApp(){
       video.muted = true;
       video.playsInline = true;
       video.loop = true;
+      video.autoplay = true;
       const onError = (e) => reject(e);
       const onSeeked = () => resolve(video);
       const onLoaded = () => {
@@ -1325,6 +1338,7 @@ export function initApp(){
               loadedSlides.push(slide);
             } else if(slideData.type === "video"){
               const video = await loadVideoFromDataUrl(slideData.dataUrl);
+              attachAnimatedVideo(video);
               const slide = {
                 type: "video",
                 name: slideData.name,

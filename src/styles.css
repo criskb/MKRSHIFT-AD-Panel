@@ -39,6 +39,14 @@ canvas{display:block;}
 }
 #panel.hidden{display:none;}
 
+.section-title{
+  margin:12px 0 6px;
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--ui-tx-dim);
+}
+
 .row{display:flex;gap:10px;align-items:center;justify-content:space-between;margin:8px 0;}
 .row label{font-size:12px;color:var(--ui-tx-dim);}
 .row .ctl{display:flex;gap:8px;align-items:center;justify-content:flex-end;}
@@ -126,17 +134,32 @@ input[type="number"]{width:88px;}
   transform:translateX(-50%) translateY(-2px);
 }
 
-#timeline{
+#timelineDock{
+  position:fixed;
+  left:12px;
+  right:12px;
+  bottom:12px;
   display:flex;
-  flex-direction:column;
-  gap:10px;
+  gap:12px;
+  padding:10px;
+  background:var(--ui-bg);
+  border:1px solid var(--ui-bd);
+  border-radius:14px;
+  backdrop-filter: blur(10px);
+  box-shadow:0 18px 60px rgba(0,0,0,.45);
+  overflow-x:auto;
+  overscroll-behavior-x:contain;
+  z-index:25;
 }
 
 .timeline-card{
+  flex:0 0 260px;
   border:1px solid rgba(255,255,255,.12);
   border-radius:12px;
   padding:10px;
   background:rgba(0,0,0,.2);
+  max-height:220px;
+  overflow:hidden;
 }
 .timeline-card.active{
   border-color:rgba(0,255,179,.55);
@@ -176,6 +199,8 @@ input[type="number"]{width:88px;}
   border-radius:10px;
   padding:6px 8px;
   border:1px solid rgba(255,255,255,.08);
+  max-height:160px;
+  overflow:auto;
 }
 .timeline-settings summary{
   cursor:pointer;
@@ -191,4 +216,4 @@ input[type="number"]{width:88px;}
 .timeline-settings details[open] summary::after{transform:rotate(180deg);}
 
 /* Hide UI for kiosk mode */
-body.kiosk #panel, body.kiosk #hud{display:none;}
+body.kiosk #panel, body.kiosk #hud, body.kiosk #timelineDock{display:none;}
