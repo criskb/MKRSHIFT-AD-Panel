@@ -1,0 +1,1012 @@
+Instructions
+
+Below is a Codex-ready task list to upgrade MKRShift DotScreen / MKRSHIFT-AD-Panel with shader + postprocessing pipelines, better transitions, and “signature MKRSHIFT looks”—based on what’s already in your UI (Render pipeline dropdown, Transition(sec), Brightness/Contrast/Saturation/Gamma, slide playlist, etc.).
+Copy/paste everything into Codex.
+
+✅ GOAL
+Add a modular render pipeline that can switch between:
+	•	Clean (fast, sharp)
+	•	Neon Bloom (MKRSHIFT glow)
+	•	Afterimage Trails (energy motion)
+	•	Halftone / Print (poster mode)
+	•	Pixel / Retro (blocky ad style)
+	•	Glitch (quick punch transition / accent)
+	•	Optional: CRT / Scanlines, Vignette, Chromatic aberration
+Also add:
+	•	Shader-based slide transitions (not just opacity)
+	•	Per-slide or global presets
+	•	Performance guardrails (kiosk safe)
+
+0) Prep: add a single “render controller” layer
+Task 0.1 — Create PostFXManager (one place controls composer/passes)
+Create file: src/postfx/PostFXManager.js (or similar)
+// PostFXManager.js
+import * as THREE from "three";
+
+// Prefer one of these import styles depending on your project:
+// r160+ style:
+// import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+// import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+// import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
+// import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+// import { AfterimagePass } from "three/addons/postprocessing/AfterimagePass.js";
+// import { GlitchPass } from "three/addons/postprocessing/GlitchPass.js";
+// import { RGBShiftShader } from "three/addons/shaders/RGBShiftShader.js";
+// import { GammaCorrectionShader } from "three/addons/shaders/GammaCorrectionShader.js";
+// import { FXAAShader } from "three/addons/shaders/FXAAShader.js";
+// import { FilmPass } from "three/addons/postprocessing/FilmPass.js";
+// import { DotScreenPass } from "three/addons/postprocessing/DotScreenPass.js";
+// import { HalftonePass } from "three/addons/postprocessing/HalftonePass.js";
+// import { SMAAPass } from "three/addons/postprocessing/SMAAPass.js";
+
+// legacy examples/jsm style:
+// import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+// ...etc
+
+export class PostFXManager {
+  constructor(renderer, scene, camera) {
+    this.renderer = renderer;
+    this.scene = scene;
+    this.camera = camera;
+
+    this.enabled = false;
+    this.mode = "none";
+    this.passes = {};
+    this.composer = null;
+
+    this.size = new THREE.Vector2(1, 1);
+    this.dpr = 1;
+
+    // tweakable settings (wire to your UI)
+    this.settings = {
+      bloom: { strength: 0.7, radius: 0.25, threshold: 0.85 },
+      afterimage: { damp: 0.90 },
+      glitch: { wild: false },
+      rgbShift: { amount: 0.0015 },
+      film: { noise: 0.20, scanlines: 0.10, scanlineCount: 800, grayscale: false },
+      halftone: { radius: 1.0, rotateR: Math.PI/12, rotateG: Math.PI/12, rotateB: Math.PI/12 },
+      dotscreen: { scale: 1.5, angle: 1.2 },
+      vignette: { intensity: 0.3 },
+    };
+  }
+
+  initComposerIfNeeded() {
+    if (this.composer) return;
+
+    // TODO: import your composer + passes at top, then build chain here.
+    // Keep this method small and deterministic.
+
+    // Example skeleton:
+    // this.composer = new EffectComposer(this.renderer);
+    // this.passes.render = new RenderPass(this.scene, this.camera);
+    // this.composer.addPass(this.passes.render);
+
+    // Add final AA pass (FXAA or SMAA) at end for kiosk clarity.
+  }
+
+  setSize(w, h, dpr = 1) {
+    this.size.set(w, h);
+    this.dpr = dpr;
+    if (this.composer) this.composer.setSize(w, h);
+    // if using FXAA: update resolution uniform here
+  }
+
+  setMode(mode) {
+    this.mode = mode;
+    this.enabled = mode !== "none";
+    this.initComposerIfNeeded();
+    this.rebuildChain();
+  }
+
+  rebuildChain() {
+    if (!this.composer) return;
+    // clear passes except render pass
+    // (some composers don’t have removeAll; rebuild a new composer is fine)
+  }
+
+  render(delta) {
+    if (!this.enabled || !this.composer) {
+      this.renderer.render(this.scene, this.camera);
+      return;
+    }
+    this.composer.render(delta);
+  }
+}
+Task 0.2 — Hook this manager into your main render loop
+In your main file (where you currently render), do:
+// after renderer/scene/camera created:
+const postFX = new PostFXManager(renderer, scene, camera);
+
+// on resize:
+postFX.setSize(width, height, renderer.getPixelRatio());
+
+// in animation loop:
+function animate(t) {
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta();
+  // update scene animations here
+  postFX.render(dt);
+}
+
+1) Build the actual pass chains (Clean / Neon / Print / Glitch…)
+Task 1.1 — Implement “chain presets”
+Inside PostFXManager, implement rebuildChain() using an internal factory.
+Recommended approach: recreate composer each time for simplicity + fewer bugs.
+rebuildChain() {
+  // Destroy and rebuild to avoid pass state weirdness:
+  // (safe + simplest for kiosk app)
+  this.composer = new EffectComposer(this.renderer);
+  this.composer.setSize(this.size.x, this.size.y);
+
+  const renderPass = new RenderPass(this.scene, this.camera);
+  this.composer.addPass(renderPass);
+
+  // IMPORTANT: if you use toneMapping / outputColorSpace, keep it consistent:
+  // renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+  if (this.mode === "clean") {
+    // optional: subtle film grain or vignette later
+  }
+
+  if (this.mode === "neon") {
+    const bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(this.size.x, this.size.y),
+      this.settings.bloom.strength,
+      this.settings.bloom.radius,
+      this.settings.bloom.threshold
+    );
+    this.composer.addPass(bloomPass);
+  }
+
+  if (this.mode === "afterimage") {
+    const afterPass = new AfterimagePass();
+    afterPass.uniforms.damp.value = this.settings.afterimage.damp;
+    this.composer.addPass(afterPass);
+  }
+
+  if (this.mode === "glitch") {
+    const glitch = new GlitchPass();
+    glitch.goWild = this.settings.glitch.wild;
+    this.composer.addPass(glitch);
+  }
+
+  if (this.mode === "halftone") {
+    const halftone = new HalftonePass(this.size.x, this.size.y, {
+      radius: this.settings.halftone.radius,
+      rotateR: this.settings.halftone.rotateR,
+      rotateG: this.settings.halftone.rotateG,
+      rotateB: this.settings.halftone.rotateB,
+    });
+    this.composer.addPass(halftone);
+  }
+
+  if (this.mode === "dotscreen") {
+    const dot = new DotScreenPass(
+      new THREE.Vector2(0, 0),
+      this.settings.dotscreen.angle,
+      this.settings.dotscreen.scale
+    );
+    this.composer.addPass(dot);
+  }
+
+  // Add RGB shift as an accent in some modes
+  if (this.mode === "neon" || this.mode === "glitch") {
+    const rgb = new ShaderPass(RGBShiftShader);
+    rgb.uniforms.amount.value = this.settings.rgbShift.amount;
+    this.composer.addPass(rgb);
+  }
+
+  // Add Film pass optionally (grain/scanlines)
+  if (this.mode === "crt" || this.mode === "neon") {
+    const film = new FilmPass(
+      this.settings.film.noise,
+      this.settings.film.scanlines,
+      this.settings.film.scanlineCount,
+      this.settings.film.grayscale
+    );
+    this.composer.addPass(film);
+  }
+
+  // Final AA: FXAA (fast) or SMAA (nicer)
+  const fxaa = new ShaderPass(FXAAShader);
+  fxaa.material.uniforms.resolution.value.set(
+    1 / (this.size.x * this.dpr),
+    1 / (this.size.y * this.dpr)
+  );
+  this.composer.addPass(fxaa);
+
+  // Optional: gamma correction at very end if needed
+  // const gamma = new ShaderPass(GammaCorrectionShader);
+  // this.composer.addPass(gamma);
+}
+Task 1.2 — Wire your existing “Render pipeline” dropdown to postFX.setMode()
+You already have a dropdown. Add options:
+	•	none
+	•	clean
+	•	neon
+	•	afterimage
+	•	halftone
+	•	dotscreen
+	•	glitch
+	•	crt
+Hook:
+renderPipelineSelect.addEventListener("change", (e) => {
+  postFX.setMode(e.target.value);
+});
+
+2) Add a REAL shader-based transition between slides (signature MKRSHIFT)
+Right now you likely do a fade between images/videos. Replace with:
+	•	render current slide → rtFrom
+	•	render next slide → rtTo
+	•	full-screen transition shader blends them with noise/mask
+Task 2.1 — Add TransitionPass
+Create file: src/postfx/TransitionPass.js
+import * as THREE from "three";
+
+export const TransitionShader = {
+  uniforms: {
+    tFrom: { value: null },
+    tTo: { value: null },
+    progress: { value: 0 },
+    time: { value: 0 },
+    softness: { value: 0.2 }, // edge softness
+    noiseScale: { value: 2.0 },
+    rgbSplit: { value: 0.001 }, // subtle
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main(){
+      vUv = uv;
+      gl_Position = vec4(position.xy, 0.0, 1.0);
+    }
+  `,
+  fragmentShader: `
+    precision highp float;
+    varying vec2 vUv;
+    uniform sampler2D tFrom;
+    uniform sampler2D tTo;
+    uniform float progress;
+    uniform float time;
+    uniform float softness;
+    uniform float noiseScale;
+    uniform float rgbSplit;
+
+    // cheap hash noise
+    float hash(vec2 p){
+      p = fract(p * vec2(123.34, 345.45));
+      p += dot(p, p + 34.345);
+      return fract(p.x * p.y);
+    }
+
+    void main(){
+      vec2 uv = vUv;
+
+      float n = hash(uv * noiseScale + time * 0.1);
+      float m = smoothstep(progress - softness, progress + softness, n);
+
+      // subtle chromatic split near the edge
+      float edge = abs(n - progress);
+      float split = rgbSplit * smoothstep(0.2, 0.0, edge);
+
+      vec4 a = texture2D(tFrom, uv);
+      vec4 bR = texture2D(tTo, uv + vec2(split, 0.0));
+      vec4 bG = texture2D(tTo, uv);
+      vec4 bB = texture2D(tTo, uv - vec2(split, 0.0));
+      vec4 b = vec4(bR.r, bG.g, bB.b, bG.a);
+
+      gl_FragColor = mix(a, b, m);
+    }
+  `,
+};
+
+export function createTransitionMaterial() {
+  return new THREE.ShaderMaterial({
+    uniforms: THREE.UniformsUtils.clone(TransitionShader.uniforms),
+    vertexShader: TransitionShader.vertexShader,
+    fragmentShader: TransitionShader.fragmentShader,
+    depthTest: false,
+    depthWrite: false,
+  });
+}
+Task 2.2 — Render slides into render targets
+Where you currently draw “the slide”, do:
+const rtA = new THREE.WebGLRenderTarget(w, h, { depthBuffer: false });
+const rtB = new THREE.WebGLRenderTarget(w, h, { depthBuffer: false });
+
+function renderSlideToTarget(slideIndex, target) {
+  renderer.setRenderTarget(target);
+  renderer.clear(true, true, true);
+
+  // show slideIndex content (image/video plane / dots geometry / etc)
+  // render that scene normally
+  renderer.render(scene, camera);
+
+  renderer.setRenderTarget(null);
+}
+Task 2.3 — Use full-screen quad with Transition shader during transitions
+Create an overlay scene:
+const transitionScene = new THREE.Scene();
+const transitionCam = new THREE.OrthographicCamera(-1,1,1,-1,0,1);
+
+const mat = createTransitionMaterial();
+const quad = new THREE.Mesh(new THREE.PlaneGeometry(2,2), mat);
+transitionScene.add(quad);
+
+let transitioning = false;
+let t0 = 0;
+let dur = 2.2;
+
+function startTransition(fromIndex, toIndex, durationSec) {
+  dur = durationSec;
+  transitioning = true;
+  t0 = performance.now();
+
+  renderSlideToTarget(fromIndex, rtA);
+  renderSlideToTarget(toIndex, rtB);
+
+  mat.uniforms.tFrom.value = rtA.texture;
+  mat.uniforms.tTo.value = rtB.texture;
+  mat.uniforms.progress.value = 0;
+}
+In your render loop:
+if (transitioning) {
+  const t = (performance.now() - t0) / 1000;
+  const p = Math.min(1, t / dur);
+
+  mat.uniforms.progress.value = p;
+  mat.uniforms.time.value = t;
+
+  renderer.setRenderTarget(null);
+  renderer.render(transitionScene, transitionCam);
+
+  if (p >= 1) transitioning = false;
+} else {
+  postFX.render(dt);
+}
+Now your existing “Transition (sec)” UI controls something real.
+
+3) Add “signature MKRSHIFT effects” that match your current style
+Task 3.1 — Selective Bloom for logo/dots only (keeps UI/text crisp)
+Do bloom on a separate layer:
+	•	Put glow objects (dots/logo plane) on layer 1
+	•	Render bloom pass using a second camera or temporarily switch layers
+Codex task:
+	1	Add glowLayer = 1
+	2	Make dots mesh: mesh.layers.enable(glowLayer)
+	3	During bloom render, set camera layers and/or use selective bloom pattern.
+If you want the simplest version: apply bloom to whole scene but keep strength modest.
+Task 3.2 — Afterimage trails mode for dots animation
+You already have dot motion. Add “Afterimage” pipeline preset. Make UI slider Trail control afterPass.uniforms.damp.
+afterPass.uniforms.damp.value = uiTrail; // 0.85..0.97
+Task 3.3 — Print modes (Halftone + DotScreen) for campaign moments
+Add presets:
+	•	Poster Halftone
+	•	Newsprint Dots
+Use HalftonePass and DotScreenPass modes.
+
+4) Add a “shader sandbox” dropdown for your Media Shader (keep your current pipeline)
+From your screenshot you already have Render pipeline: Media shader. Keep it, but extend the shader.
+Task 4.1 — Upgrade the media shader to support these toggles:
+	•	Vignette
+	•	Barrel distortion
+	•	Subtle grain
+	•	Scanline (optional)
+	•	Chromatic split (very subtle)
+	•	Edge sharpen (for logos/text)
+Fragment shader snippet you can paste into your existing media shader:
+// --- Add uniforms:
+uniform float uVignette;   // 0..1
+uniform float uGrain;      // 0..1
+uniform float uSharpen;    // 0..1
+uniform float uChromAb;    // 0..0.01
+
+float rand(vec2 co){
+  return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
+}
+
+vec3 sharpen(sampler2D tex, vec2 uv, vec2 px, float amount){
+  vec3 c = texture2D(tex, uv).rgb;
+  vec3 n = texture2D(tex, uv + vec2(0.0, px.y)).rgb;
+  vec3 s = texture2D(tex, uv - vec2(0.0, px.y)).rgb;
+  vec3 e = texture2D(tex, uv + vec2(px.x, 0.0)).rgb;
+  vec3 w = texture2D(tex, uv - vec2(px.x, 0.0)).rgb;
+  vec3 edge = (n + s + e + w) * 0.25 - c;
+  return c - edge * amount;
+}
+
+// --- In main():
+vec2 px = vec2(1.0/uResolution.x, 1.0/uResolution.y);
+
+// Chromatic aberration
+vec2 ca = (vUv - 0.5) * uChromAb;
+vec3 col;
+col.r = texture2D(uTex, vUv + ca).r;
+col.g = texture2D(uTex, vUv).g;
+col.b = texture2D(uTex, vUv - ca).b;
+
+// Sharpen
+col = mix(col, sharpen(uTex, vUv, px, 1.0), uSharpen);
+
+// Vignette
+float d = distance(vUv, vec2(0.5));
+float vig = smoothstep(0.8, 0.2, d);
+col *= mix(1.0, vig, uVignette);
+
+// Grain
+float g = rand(vUv * uTime) - 0.5;
+col += g * uGrain * 0.08;
+
+gl_FragColor = vec4(col, 1.0);
+Wire to UI sliders.
+
+5) Add “Presets” (so you can quickly switch looks on kiosks)
+Task 5.1 — Define preset JSON and apply it
+const PRESETS = {
+  CleanKiosk: {
+    pipeline: "clean",
+    transition: { sec: 1.4, softness: 0.18, noiseScale: 2.0 },
+    tone: { brightness: 0, contrast: 1, saturation: 1, gamma: 1 },
+  },
+  MKRShiftNeon: {
+    pipeline: "neon",
+    bloom: { strength: 0.9, radius: 0.35, threshold: 0.82 },
+    transition: { sec: 2.2, softness: 0.22, noiseScale: 2.4, rgbSplit: 0.0018 },
+  },
+  PrintPoster: {
+    pipeline: "halftone",
+    transition: { sec: 1.6, softness: 0.15, noiseScale: 3.0 },
+  },
+  EnergyTrails: {
+    pipeline: "afterimage",
+    afterimage: { damp: 0.92 },
+  }
+};
+
+function applyPreset(p) {
+  if (p.pipeline) postFX.setMode(p.pipeline);
+  if (p.bloom) Object.assign(postFX.settings.bloom, p.bloom);
+  if (p.afterimage) Object.assign(postFX.settings.afterimage, p.afterimage);
+  // also update transition shader uniforms if using TransitionPass
+  // update UI controls to match
+}
+Add a preset dropdown in your settings panel.
+
+6) Performance + kiosk stability tasks (do these, it matters)
+Task 6.1 — Cap DPR (huge win on 4K screens)
+const DPR_CAP = 1.5; // kiosk safe
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, DPR_CAP));
+Task 6.2 — Pause heavy passes when UI is hidden OR tab is hidden
+document.addEventListener("visibilitychange", () => {
+  const hidden = document.hidden;
+  postFX.enabled = !hidden;
+});
+Task 6.3 — Video texture update only when frame changes
+If using <video> as texture, prefer requestVideoFrameCallback:
+if ("requestVideoFrameCallback" in HTMLVideoElement.prototype) {
+  video.requestVideoFrameCallback(function tick(){
+    videoTex.needsUpdate = true;
+    video.requestVideoFrameCallback(tick);
+  });
+} else {
+  // fallback: update every frame (ok, but heavier)
+}
+
+7) UX polishing based on your screenshot
+Task 7.1 — Add an “Effects” group under Color & Tone
+Add sliders for:
+	•	Bloom strength
+	•	Trail damp
+	•	Grain amount
+	•	Vignette
+	•	Chromatic split
+	•	Transition softness
+Wire to:
+	•	postFX.settings.*
+	•	transitionShader.uniforms.*
+Task 7.2 — Add “safe defaults” for text/logo slides
+If slide is text/logo (sharp edges), force:
+	•	pipeline = clean or neon (low bloom)
+	•	disable heavy distortion
+
+8) Smoke-check checklist (run after each change)
+Codex: After implementing each section, do:
+	1	App boots without console errors
+	2	Render pipeline dropdown changes effect live
+	3	Transition plays and ends correctly
+	4	Fullscreen + Hide UI still works
+	5	Drag/drop media still works
+	6	At least one demo slide plays
+
+Quick recommended pipeline mapping for your UI dropdown
+Add these items to your “Render pipeline”:
+	•	Media shader (your current)
+	•	Clean (Composer)
+	•	Neon Bloom
+	•	Afterimage Trails
+	•	Print Halftone
+	•	DotScreen (Newsprint)
+	•	Glitch Accent
+	•	CRT Light (FilmPass)
+
+—————————————————
+Below is a Codex-ready task list to fix MP4/WebM video + GIFs stuck on first frame and make playback solid for a kiosk/digital-signage setup.
+The two most common causes are:
+	1	Autoplay restrictions: video.play() is getting blocked (must be muted + usually needs a user gesture once). play()returns a Promise and will reject when blocked. (MDN Web Docs)
+	2	Wrong texture type / no updates: using THREE.Texture(video) (static) instead of THREE.VideoTexture(video), or using createImageBitmap() on GIF/video (often yields only first frame).
+
+✅ Task List: Fix VIDEO playback (MP4/WebM)
+1) Replace any “video as image texture” with THREE.VideoTexture
+Search for: new THREE.Texture(video) or TextureLoader on video, or createImageBitmap(video).
+Use this helper:
+import * as THREE from "three";
+
+export async function createVideoSourceFromFile(file) {
+  const url = URL.createObjectURL(file);
+
+  const video = document.createElement("video");
+  video.src = url;
+
+  // kiosk-friendly defaults
+  video.muted = true;             // muted autoplay is generally allowed
+  video.loop = true;
+  video.playsInline = true;       // important for iOS/Safari inline playback
+  video.autoplay = true;
+  video.preload = "auto";
+
+  // For Safari/iOS quirks:
+  video.setAttribute("playsinline", "");
+  video.setAttribute("webkit-playsinline", "");
+
+  // Wait until the browser has enough data to start
+  await new Promise((resolve, reject) => {
+    const onReady = () => resolve();
+    const onErr = (e) => reject(e);
+    video.addEventListener("canplay", onReady, { once: true });
+    video.addEventListener("error", onErr, { once: true });
+    video.load();
+  });
+
+  // Try to play; if blocked, you MUST ask for a click/tap once
+  try {
+    await video.play(); // returns a Promise; rejects when autoplay denied
+  } catch (err) {
+    // Show “Click to start” overlay once; then call video.play() again.
+    // Autoplay failures are expected on many setups. :contentReference[oaicite:1]{index=1}
+    throw new Error("AUTOPLAY_BLOCKED");
+  }
+
+  const texture = new THREE.VideoTexture(video);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = false;
+
+  return {
+    kind: "video",
+    video,
+    texture,
+    url,
+    dispose() {
+      try { video.pause(); } catch {}
+      video.removeAttribute("src");
+      video.load();
+      URL.revokeObjectURL(url);
+      texture.dispose();
+    },
+  };
+}
+2) Add a single “Click to Start Playback” gate (kiosk safe)
+If you ever get AUTOPLAY_BLOCKED, do this once:
+function showTapToStartOverlay(onStart) {
+  const overlay = document.createElement("div");
+  overlay.style.cssText = `
+    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    background:rgba(0,0,0,0.65); z-index:999999; color:white; font:600 18px/1.2 system-ui;
+    cursor:pointer;
+  `;
+  overlay.textContent = "Click to start playback";
+  overlay.addEventListener("click", async () => {
+    overlay.remove();
+    await onStart();
+  }, { once: true });
+  document.body.appendChild(overlay);
+}
+Then in your video load flow:
+let src;
+try {
+  src = await createVideoSourceFromFile(file);
+} catch (e) {
+  if (String(e.message).includes("AUTOPLAY_BLOCKED")) {
+    showTapToStartOverlay(async () => {
+      src = await createVideoSourceFromFile(file); // or retry play on existing element
+      // attach src.texture to your shader/material here
+    });
+    return;
+  }
+  throw e;
+}
+3) Slide switching rules (prevents “stuck first frame” + frees memory)
+When a slide becomes active:
+	•	call video.currentTime = 0 (optional)
+	•	call video.play() (retry)
+	•	attach its VideoTexture to your shader uniform
+When leaving slide:
+	•	video.pause()
+	•	optionally dispose() if not reused
+
+✅ Task List: Fix GIF playback (animated, not first-frame only)
+Choose one of these approaches:
+Option A (fast patch): Keep <img> animated and force texture updates
+This is the simplest fix if you already treat GIFs like images.
+import * as THREE from "three";
+
+export async function createGifSourceQuick(file) {
+  const url = URL.createObjectURL(file);
+
+  const img = new Image();
+  img.decoding = "async";
+  img.src = url;
+
+  await img.decode(); // decodes first frame; animation continues in <img>
+
+  const texture = new THREE.Texture(img);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = false;
+  texture.needsUpdate = true;
+
+  // Critical: GIF frames will NOT push updates into WebGL automatically.
+  // You must mark needsUpdate repeatedly.
+  let alive = true;
+  function update() {
+    if (!alive) return;
+    texture.needsUpdate = true;
+  }
+
+  return {
+    kind: "gif",
+    img,
+    texture,
+    update, // call this in your render loop (maybe throttle to 30fps)
+    dispose() {
+      alive = false;
+      URL.revokeObjectURL(url);
+      texture.dispose();
+    },
+  };
+}
+In your render loop:
+// throttle GIF updates to reduce GPU uploads
+let lastGifUpdate = 0;
+function tick(t) {
+  if (gifSource && (t - lastGifUpdate) > 33) { // ~30fps
+    gifSource.update();
+    lastGifUpdate = t;
+  }
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+✅ Pros: tiny change, usually fixes “stuck first frame” immediately ⚠️ Cons: uploads to GPU often; can be heavy if many GIFs
+
+Option B (best): Decode GIF frames and drive them yourself (smooth + efficient)
+If you want “proper signage-grade” GIF handling, decode frames and blit onto a canvas, then use THREE.CanvasTexture.
+Use gifuct-js (small, reliable). Create:
+import * as THREE from "three";
+import { parseGIF, decompressFrames } from "gifuct-js";
+
+export async function createGifSourceDecoded(file) {
+  const buf = await file.arrayBuffer();
+  const gif = parseGIF(buf);
+  const frames = decompressFrames(gif, true); // gives RGBA patches + delays
+
+  const width = gif.lsd.width;
+  const height = gif.lsd.height;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+  const imageData = ctx.createImageData(width, height);
+
+  // Start with blank
+  ctx.clearRect(0, 0, width, height);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = false;
+
+  let i = 0;
+  let acc = 0;
+  let alive = true;
+
+  function drawFrame(frame) {
+    // frame.patch is Uint8ClampedArray RGBA for the frame area
+    // frame.dims: { width, height, left, top }
+    const { width: fw, height: fh, left, top } = frame.dims;
+
+    // Put patch into ImageData at correct offset
+    // Easiest: create temp ImageData for patch then putImageData
+    const patch = new ImageData(frame.patch, fw, fh);
+    ctx.putImageData(patch, left, top);
+
+    texture.needsUpdate = true;
+  }
+
+  function update(dtMs) {
+    if (!alive) return;
+    acc += dtMs;
+
+    // delay is in hundredths of a second in many GIFs; gifuct gives ms-ish delay per frame
+    const delay = Math.max(20, frames[i].delay || 100); // clamp for “0 delay” gifs
+    if (acc >= delay) {
+      acc = acc % delay;
+      drawFrame(frames[i]);
+      i = (i + 1) % frames.length;
+    }
+  }
+
+  return {
+    kind: "gif",
+    texture,
+    update, // call update(deltaMs)
+    dispose() {
+      alive = false;
+      texture.dispose();
+    },
+  };
+}
+In your animation loop (delta time based):
+let lastT = performance.now();
+function tick(t) {
+  const dt = t - lastT;
+  lastT = t;
+
+  if (gifDecoded) gifDecoded.update(dt);
+
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+✅ Pros: stable timing, lower overhead, full control ⚠️ Cons: adds dependency
+
+Extra improvements (worth doing)
+A) If you sample video frames manually, use requestVideoFrameCallback
+If your pipeline needs “update only when a new frame exists” (e.g. custom canvas processing), use:
+	•	video.requestVideoFrameCallback(cb) to sync exactly to frame delivery. (MDN Web Docs)
+B) Make “Media Source” a unified interface
+Have one interface for image/video/gif:
+type MediaSource = {
+  kind: "image" | "video" | "gif";
+  texture: THREE.Texture;
+  update?: (dtMs: number) => void;
+  dispose: () => void;
+}
+Then your render loop can simply do:
+if (activeMedia?.update) activeMedia.update(dt);
+shaderUniforms.uMedia.value = activeMedia.texture;
+C) Prevent multiple videos decoding at once
+Only keep the active slide’s video playing. Pause others. This prevents CPU spikes and “first frame stuck” edge cases when tab throttling kicks in.
+
+Quick “what to change right now” checklist
+	•	 Ensure every video element has: muted=true, playsInline=true, loop=true
+	•	 Always await video.play() and handle rejection (show click-to-start) (MDN Web Docs)
+	•	 Use THREE.VideoTexture(video) not THREE.Texture(video)
+	•	 For GIFs: either (A) set texture.needsUpdate=true repeatedly, or (B) decode + CanvasTexture
+	•	 On slide change: pause previous media + dispose object URLs
+
+—————————————
+Here’s a ship-ready UI/UX task list for MKRShift DotScreen / AD Panel, written like a product checklist you can paste into Codex or turn into GitHub issues. It’s focused on kiosk + signage realities: touch-first, “never gets stuck,” clear states, safe exits, and fast edits.
+
+1) Kiosk Mode that feels intentional (not just fullscreen)
+1.1 Enter/Exit Kiosk button + ESC exit
+	•	Add “Enter Kiosk” button (big, primary).
+	•	When enabled:
+	◦	Fullscreen on
+	◦	UI hidden
+	◦	Cursor hidden after 2s idle
+	◦	Disable accidental scroll/drag selection
+	◦	Lock editing actions unless user “Unlocks” (see 1.3)
+	•	Exit with ESC, show a small toast “Exited kiosk”.
+Acceptance:
+	•	One tap starts kiosk with no additional steps (unless browser blocks fullscreen).
+	•	ESC always exits kiosk and shows UI.
+1.2 Kiosk overlay help (non-annoying)
+	•	On kiosk enter, show a tiny 2s overlay:
+	◦	“Kiosk mode on • Press ESC to exit • Hold 2s top-right to unlock”
+	•	Then fades.
+1.3 “Hold to unlock” (prevents random touches breaking playback)
+	•	While kiosk is on: tapping shouldn’t open settings.
+	•	Add a hidden “unlock zone” (e.g., top-right corner).
+	•	Hold 2 seconds → “Unlocked” → UI becomes available.
+Acceptance: accidental taps never expose controls.
+
+2) Separate “Edit Mode” and “Playback Mode”
+Right now you have settings and playback controls mixed. Make modes explicit.
+2.1 Mode toggle
+	•	Toggle in settings header:
+	◦	Edit (UI visible, drag-drop, reorder)
+	◦	Play (minimal controls, autoplay respected)
+Acceptance: in Play mode, editing UI is gone or locked.
+2.2 Playback HUD (only what matters)
+When in Play/Kiosk, show only:
+	•	current slide title (optional)
+	•	small progress bar
+	•	subtle “Next / Prev” (optional)
+	•	tiny status icon (✅ playing / ⚠️ missing media)
+
+3) First-run onboarding that prevents confusion
+3.1 First-run wizard (one screen)
+On first visit, show a clean setup modal:
+	•	“Drop media here” (big)
+	•	Buttons:
+	◦	Add Media
+	◦	Add Text Slide
+	◦	Load Project
+	◦	Demo Playlist
+Acceptance: user can create a working playlist in <30 seconds.
+3.2 Empty state improvements
+If playlist is empty:
+	•	center message + drop zone highlight
+	•	“Add Demo” button
+	•	“Supported formats: PNG/JPG/WebP/GIF/MP4/WebM”
+
+4) Playlist UX that is signage-grade
+This is the biggest “ready to ship” category.
+4.1 Playlist thumbnails + types
+Each slide row shows:
+	•	thumbnail / icon (T for text, ▶ for video, GIF badge)
+	•	name (editable)
+	•	duration (per slide override)
+	•	“remove” and “duplicate”
+	•	drag handle for reorder (touch-friendly)
+Acceptance: reorder is obvious and easy.
+4.2 Drag reorder + multi-select
+	•	Drag handle to reorder
+	•	Shift-select / checkbox multi-select
+	•	Batch actions: remove / set duration / set pipeline preset
+4.3 Per-slide overrides
+Allow per-slide:
+	•	duration
+	•	transition type
+	•	render pipeline preset
+	•	tone (optional: “use global” checkbox)
+Acceptance: global defaults remain, but power users can tune a single slide.
+4.4 “Preview this slide” button
+In edit mode:
+	•	click slide → it displays immediately without changing autoplay timers.
+
+5) Make settings feel premium and safe
+5.1 Settings panel: sections + sticky actions
+Your panel is good—tighten UX:
+	•	Collapse groups:
+	◦	Playback
+	◦	Look (Tone + Pipeline)
+	◦	Slides
+	◦	System
+	•	Sticky bottom bar:
+	◦	Save
+	◦	Reset
+	◦	Enter Kiosk
+5.2 Safe numeric inputs
+For interval/transition:
+	•	step buttons (+/-)
+	•	input clamps
+	•	tooltips: “Transition must be < interval”
+Acceptance: no invalid combos.
+5.3 “Reset only this section”
+Add:
+	•	Reset Playback
+	•	Reset Look
+	•	Reset Slides
+
+6) Feedback + errors that users actually understand
+6.1 Toast notifications for every meaningful action
+	•	“Added 3 media items”
+	•	“Saved project”
+	•	“Couldn’t play video: click to enable playback”
+	•	“Unsupported format”
+6.2 Media health warnings
+In playlist, show:
+	•	⚠️ missing/failed media
+	•	“Video blocked” state with fix hint
+	•	“GIF using heavy mode” hint if perf issues
+6.3 Confirmation dialogs (only where needed)
+	•	Removing slides
+	•	Reset all
+	•	Exiting edit with unsaved changes
+
+7) Touch-first + kiosk ergonomics
+7.1 Hit targets and spacing
+	•	Buttons minimum 44px height
+	•	Increase padding in playlist rows and controls
+	•	Bigger drag handles
+7.2 Cursor + idle behavior
+	•	In kiosk: hide cursor after 2s idle
+	•	In edit: keep cursor
+7.3 Prevent accidental page gestures
+	•	Disable page scroll during kiosk
+	•	Prevent double-tap zoom on touch screens (optional)
+
+8) Visual polish: hierarchy + readability
+8.1 Stronger hierarchy in right panel
+	•	Make “Dotscreen Controls” header more distinct
+	•	Use consistent label alignment
+	•	Group sliders into a grid (label / slider / value)
+8.2 Consistent microcopy
+	•	Use one naming system:
+	◦	“Slide interval”
+	◦	“Transition time”
+	◦	“Look preset”
+	◦	“Pipeline”
+	•	Avoid “Render pipeline” if users don’t know it; rename to Look / Effect
+8.3 “Quick preset chips”
+Add top-level chips:
+	•	Clean
+	•	Neon
+	•	Print
+	•	Trails
+	•	Glitch (short)
+
+9) Projects that are truly portable
+9.1 “Export Project” / “Import Project”
+	•	Export JSON file (and optionally a ZIP later)
+	•	Import JSON file
+	•	Keep current “Save Project / Load Project” but also provide file-based
+9.2 Autosave + versioning
+	•	Autosave to localStorage every change
+	•	Keep last 5 revisions (“Restore previous”)
+Acceptance: users don’t lose work.
+
+10) Ship-grade performance and reliability UX
+10.1 Performance mode toggle
+Add a toggle:
+	•	Performance Mode (recommended for 4K kiosks)
+	◦	caps DPR
+	◦	disables heaviest effects
+	◦	limits GIF update rate
+10.2 FPS/Status debug (hidden)
+	•	?debug=1 shows:
+	◦	fps
+	◦	current slide id
+	◦	memory usage (if available)
+	◦	renderer dpr
+10.3 Watchdog safety
+If rendering fails or media fails:
+	•	fall back to a safe “Clean mode”
+	•	show a discreet “Recovered from error” toast
+
+11) Keyboard shortcuts (make them discoverable)
+You already have H/F/S. Add:
+	•	Space: Play/Pause (optional)
+	•	→ / ←: Next/Prev slide
+	•	K: Enter/Exit kiosk
+	•	?: show shortcuts overlay
+	•	Esc: Exit kiosk / close modal
+Add a Shortcuts section in settings.
+
+12) Accessibility + clarity (still matters for kiosks)
+	•	Ensure text contrast meets basic readability
+	•	Focus trap for modal dialogs
+	•	Labels for sliders (aria-label)
+	•	Large text mode (optional toggle)
+
+“Ready to ship” acceptance checklist
+Use this to decide if you’re done:
+	•	 New user can add media and start playback in under 30 seconds
+	•	 Kiosk mode works: enter button, ESC exit, cursor hides, UI locked
+	•	 Playlist reorder is easy and obvious (drag handle + thumbnails)
+	•	 Every action has feedback (toast) and errors explain how to fix
+	•	 Videos/GIFs reliably animate; autoplay blocked cases are handled
+	•	 Settings are grouped, searchable or well structured, with safe defaults
+	•	 Export/Import works (portable project) and autosave prevents loss
+	•	 Performance mode prevents stutters on 4K screens
+	•	Kiosk button + hold-to-unlock
+	•	Playlist panel with thumbnails + drag reorder
+	•	Toast system + shortcut overlay
+
+
