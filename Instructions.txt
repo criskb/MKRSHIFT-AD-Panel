@@ -1,1012 +1,793 @@
-Instructions
+# MKRSHIFT-AD-Panel Development Roadmap
 
-Below is a Codex-ready task list to upgrade MKRShift DotScreen / MKRSHIFT-AD-Panel with shader + postprocessing pipelines, better transitions, and “signature MKRSHIFT looks”—based on what’s already in your UI (Render pipeline dropdown, Transition(sec), Brightness/Contrast/Saturation/Gamma, slide playlist, etc.).
-Copy/paste everything into Codex.
+Hey Cris (@cris_k_b), based on our discussions, I've compiled everything we've covered into a comprehensive roadmap for improving your Vite + Three.js-based digital ad panel app. This includes general enhancements, effects system revamp, layer-based design builder, 3D model support, color customization, drag-and-drop UI, snapping/precision, and kiosk mode.
 
-✅ GOAL
-Add a modular render pipeline that can switch between:
-	•	Clean (fast, sharp)
-	•	Neon Bloom (MKRSHIFT glow)
-	•	Afterimage Trails (energy motion)
-	•	Halftone / Print (poster mode)
-	•	Pixel / Retro (blocky ad style)
-	•	Glitch (quick punch transition / accent)
-	•	Optional: CRT / Scanlines, Vignette, Chromatic aberration
-Also add:
-	•	Shader-based slide transitions (not just opacity)
-	•	Per-slide or global presets
-	•	Performance guardrails (kiosk safe)
+I've also thought about what's missing: 
+- **Persistence and Data Management**: Saving/loading configurations (playlists, layers, effects) to JSON or localStorage for reusability.
+- **Multi-Slide/Playlist Enhancements**: Better management for per-slide timings, transitions, and dynamic content (e.g., API-fed data for info screens).
+- **Export and Sharing**: Options to export ads as images/videos or deployable bundles.
+- **Accessibility and Inclusivity**: Keyboard navigation, screen reader support, high-contrast modes.
+- **Testing and Debugging**: Unit/integration tests, error boundaries, logging.
+- **Performance and Optimization**: FPS monitoring, asset compression, lazy loading.
+- **Deployment and CI/CD**: Hosting guides, GitHub Actions for builds.
+- **Advanced Features**: Animation timelines for layers, multi-device sync, theming.
+- **Security**: Input validation, especially for user uploads.
 
-0) Prep: add a single “render controller” layer
-Task 0.1 — Create PostFXManager (one place controls composer/passes)
-Create file: src/postfx/PostFXManager.js (or similar)
-// PostFXManager.js
-import * as THREE from "three";
+The roadmap is structured as a step-by-step guide, categorized by feature areas. Each step includes actionable instructions, estimated effort (low/medium/high), and dependencies. Prioritize based on your needs—start with core (documentation, effects) then build out (layers, UI, kiosk).
 
-// Prefer one of these import styles depending on your project:
-// r160+ style:
-// import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
-// import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
-// import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
-// import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
-// import { AfterimagePass } from "three/addons/postprocessing/AfterimagePass.js";
-// import { GlitchPass } from "three/addons/postprocessing/GlitchPass.js";
-// import { RGBShiftShader } from "three/addons/shaders/RGBShiftShader.js";
-// import { GammaCorrectionShader } from "three/addons/shaders/GammaCorrectionShader.js";
-// import { FXAAShader } from "three/addons/shaders/FXAAShader.js";
-// import { FilmPass } from "three/addons/postprocessing/FilmPass.js";
-// import { DotScreenPass } from "three/addons/postprocessing/DotScreenPass.js";
-// import { HalftonePass } from "three/addons/postprocessing/HalftonePass.js";
-// import { SMAAPass } from "three/addons/postprocessing/SMAAPass.js";
+## 1. **Repo Basics and Documentation**
+   Effort: Low. Dependencies: None.
 
-// legacy examples/jsm style:
-// import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
-// ...etc
+   - **Step 1.1**: Create `README.md` with project description, features, installation (`npm install && npm run dev`), usage, tech stack (Vite, Three.js), contributing guidelines, and license reference.
+   - **Step 1.2**: Add GitHub repo description: "A Three.js-based digital signage tool for ad panels with post-processing effects, layer-based design, and kiosk mode."
+   - **Step 1.3**: Add topics: threejs, vite, webgl, shaders, digital-signage, ad-panel.
+   - **Step 1.4**: Update `Instructions.txt` to reference this roadmap; consider migrating to Markdown docs in `/docs/`.
+   - **Step 1.5** (New): Add a `CHANGELOG.md` for tracking versions and a `CONTRIBUTING.md` if open to PRs.
 
-export class PostFXManager {
+## 2. **Post-Processing and Effects System**
+   Effort: Medium. Dependencies: Three.js addons.
+
+   - **Step 2.1**: Implement `src/postfx/PostFXManager.js` with EffectComposer, RenderPass, OutputPass, and an array of effects (e.g., BloomPass, RGBShiftShader).
+   - **Step 2.2**: Add methods: `addEffect`, `removeEffect`, `toggleEffect`, `reorderEffects`, `rebuildChain`.
+   - **Step 2.3**: Integrate into main render loop: Replace `renderer.render` with `postFX.render(delta)`.
+   - **Step 2.4**: Add pipeline presets (clean, neon, vignette, chromatic aberration) via JSON or code.
+   - **Step 2.5**: Implement transitions in `src/postfx/TransitionPass.js` with shader, render targets, and progress uniform.
+   - **Step 2.6** (New): Add global vs. per-slide effects toggle; store in slide metadata.
+   - **Step 2.7** (New): Performance guard: Monitor FPS in loop; fallback to low-effect mode if <30fps.
+
+## 3. **UI/UX Enhancements (Sidebar and Controls)**
+   Effort: Medium. Dependencies: dat.gui (npm install).
+
+   - **Step 3.1**: Install dat.gui and integrate: Create GUI instance, append to body, style as sidebar.
+   - **Step 3.2**: Organize folders: "Global Settings" (brightness/contrast), "Effects Stack", "Design Layers", "Playlist", "Presets".
+   - **Step 3.3**: For effects: Dynamic folders with toggles, param sliders, reorder buttons; update on change.
+   - **Step 3.4**: Add real-time previews for sliders (update uniforms live).
+   - **Step 3.5**: Make responsive: Update on window resize.
+   - **Step 3.6** (New): Add theme toggle (dark/light) for UI.
+   - **Step 3.7** (New): Integrate sortablejs for drag-drop reordering in effects/layers lists.
+
+## 4. **Layer-Based Design System (for Overlays and Info Screens)**
+   Effort: High. Dependencies: Three.js addons (TextGeometry, FontLoader).
+
+   - **Step 4.1**: Create `src/layers/LayerManager.js` with Group container, layers array, methods: `addLayer`, `removeLayer`, `updateLayer`, `reorderLayers`, `sortLayers`, `clear`.
+   - **Step 4.2**: Support layer types: background (color/texture), image (position/size), text (content/size/align), overlay (opacity/blending/gradient), shape (rect/circle), video (VideoTexture), 3dmodel.
+   - **Step 4.3**: Load fonts asynchronously for text; add multiple font options.
+   - **Step 4.4**: Handle colors: Add `color` param to relevant types; use `THREE.Color` and update materials.
+   - **Step 4.5**: For gradients/overlays: Use ShaderMaterial with uniforms for color1/color2.
+   - **Step 4.6**: Integrate with GUI: Dynamic folders per layer with type-specific controls (e.g., color pickers via `addColor`, position sliders).
+   - **Step 4.7** (New): Add dynamic text: Support `dataSource` param for API fetches (e.g., flight data); update periodically.
+   - **Step 4.8** (New): Templates: Pre-defined layer stacks (e.g., "Info Screen" button loads background + texts).
+   - **Step 4.9** (New): Accessibility: Add high-contrast mode toggle; generate alt text for layers.
+
+## 5. **3D Model Support (USDZ/USDC)**
+   Effort: Medium. Dependencies: three-usdz-loader or TinyUSDZ (npm install/setup WASM).
+
+   - **Step 5.1**: Choose loader: Prefer three-usdz-loader for USDZ; use TinyUSDZ for standalone USDC.
+   - **Step 5.2**: Add to `addLayer('3dmodel')`: Load via URL/file, add to Group, handle position/scale/rotation/animations (AnimationMixer).
+   - **Step 5.3**: Update in render loop for animations/mixers.
+   - **Step 5.4**: GUI controls: Sliders for scale/rotation, color tint picker.
+   - **Step 5.5**: Cleanup: Dispose geometries/materials on remove.
+   - **Step 5.6** (New): Add auto-rotation option; support model tinting via traverse.
+   - **Step 5.7** (New): Camera switch: Toggle ortho/perspective for 2D/3D mixes; add lights.
+
+## 6. **Drag-and-Drop Component Drawer, Snapping, and Precision**
+   Effort: Medium. Dependencies: sortablejs (npm install).
+
+   - **Step 6.1**: Add HTML for drawer: List of draggable components (background, image, text, etc.).
+   - **Step 6.2**: Setup Sortable: Clone from drawer, drop on canvas to add layer at mouse position.
+   - **Step 6.3**: For file types (image/3dmodel): Prompt for URL/file after drop.
+   - **Step 6.4**: Implement snapping: GridHelper toggle; snap positions to 0.05 steps.
+   - **Step 6.5**: Precision: Keyboard nudging (arrows, shift for fine); raycaster for selection on click.
+   - **Step 6.6** (New): Add resize/rotate gizmos via TransformControls on select.
+   - **Step 6.7** (New): Mobile support: Touch events for drag/drop.
+
+## 7. **Playlist and Slide Management**
+   Effort: Medium. Dependencies: Layer system.
+
+   - **Step 7.1**: Enhance playlist: Drag-drop reordering (sortablejs), per-slide timings/transitions.
+   - **Step 7.2**: Autoplay: setInterval for cycling; pause on interaction.
+   - **Step 7.3** (New): Persistence: Save/load playlists/layers/effects to JSON (export button); use localStorage for drafts.
+   - **Step 7.4** (New): Dynamic content: API integration for slides (e.g., weather/news feeds).
+
+## 8. **Kiosk Mode**
+   Effort: Low. Dependencies: Playlist.
+
+   - **Step 8.1**: Add toggle function: Enter/exit fullscreen, hide UI (drawer, GUI), disable interactions.
+   - **Step 8.2**: Auto-start autoplay; prevent esc/F11 exit.
+   - **Step 8.3**: Listen for fullscreen changes to reset.
+   - **Step 8.4** (New): Idle restart: Reset to first slide after inactivity.
+   - **Step 8.5** (New): Analytics: Track slide views/durations (localStorage or external log).
+
+## 9. **Code Quality, Testing, and Security**
+   Effort: Medium. Dependencies: None.
+
+   - **Step 9.1**: Update deps (Three.js latest); add TypeScript (rename .js to .ts, install types).
+   - **Step 9.2**: Modularize: Folders for postfx, layers, ui; ES modules.
+   - **Step 9.3**: Error handling: Try-catch in loops; UI toasts for errors.
+   - **Step 9.4**: Linting: ESLint + Prettier (npm install, configure).
+   - **Step 9.5**: Testing: Vitest for units (effects, layers); test render modes/transitions.
+   - **Step 9.6** (New): Security: Validate uploads (file types/sizes); npm audit fix.
+   - **Step 9.7** (New): Performance: FPS counter in GUI; optimize assets (compression).
+
+## 10. **Deployment, Export, and Advanced Features**
+   Effort: High. Dependencies: All above.
+
+   - **Step 10.1**: Build: `npm run build`; host on GitHub Pages/Vercel/Netlify; add demo link to README.
+   - **Step 10.2** (New): CI/CD: GitHub Actions for tests/builds on push.
+   - **Step 10.3** (New): Export: Capture canvas to image/video (via CCapture.js); save as downloadable ad.
+   - **Step 10.4** (New): Multi-device: WebSocket sync for linked panels.
+   - **Step 10.5** (New): Animation timelines: Use GSAP or Three.js tweens for layer entrances/exits.
+   - **Step 10.6** (New): Internationalization: i18n for text layers (e.g., vue-i18n if migrating).
+
+## Implementation Tips
+- **Order**: Start with 1-3 (basics/effects/UI), then 4-6 (layers/drag/kiosk), finish with 7-10.
+- **Testing**: After each category, test in browsers (Chrome/Firefox), devices (desktop/mobile), and low-end hardware.
+- **Versioning**: Use semantic versioning; tag releases on GitHub.
+- **Resources**: Refer to Three.js docs/examples; your original Instructions.txt for shaders.
+- **Timeline**: Aim for 1-2 weeks per major section, depending on time.
+
+This covers a complete, production-ready app. If anything's off or you want to prioritize differently, let me know!
+
+
+
+Code: examples
+
+# MKRSHIFT-AD-Panel Code Implementation Guide
+
+This document complements the Development Roadmap by providing detailed code snippets, structures, and implementation notes for each major section. It's organized by the roadmap's categories. Code is in JavaScript (ES modules), assuming a Vite + Three.js setup. Use this as a blueprint—copy/paste and adapt as needed.
+
+All code assumes imports from `three` and addons (e.g., `import * as THREE from 'three'; import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';`). Install dependencies as noted (e.g., `npm i dat.gui sortablejs three-usdz-loader`).
+
+## 1. Repo Basics and Documentation
+No code here—focus on Markdown files. Example for `README.md`:
+```
+# MKRSHIFT-AD-Panel
+
+A Three.js-based digital signage tool...
+
+## Installation
+```bash
+git clone https://github.com/criskb/MKRSHIFT-AD-Panel.git
+cd MKRSHIFT-AD-Panel
+npm install
+npm run dev
+```
+```
+
+## 2. Post-Processing and Effects System
+Core file: `src/postfx/PostFXManager.js`. Integrate in `src/main.js`: `const postFX = new PostFXManager(renderer, scene, camera);` and use `postFX.render(delta)` in animate loop.
+
+```javascript
+// src/postfx/PostFXManager.js
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { BloomPass } from 'three/addons/postprocessing/BloomPass.js'; // Example pass
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { RGBShiftShader } from 'three/addons/shaders/RGBShiftShader.js';
+
+class PostFXManager {
   constructor(renderer, scene, camera) {
-    this.renderer = renderer;
-    this.scene = scene;
-    this.camera = camera;
-
-    this.enabled = false;
-    this.mode = "none";
-    this.passes = {};
-    this.composer = null;
-
-    this.size = new THREE.Vector2(1, 1);
-    this.dpr = 1;
-
-    // tweakable settings (wire to your UI)
-    this.settings = {
-      bloom: { strength: 0.7, radius: 0.25, threshold: 0.85 },
-      afterimage: { damp: 0.90 },
-      glitch: { wild: false },
-      rgbShift: { amount: 0.0015 },
-      film: { noise: 0.20, scanlines: 0.10, scanlineCount: 800, grayscale: false },
-      halftone: { radius: 1.0, rotateR: Math.PI/12, rotateG: Math.PI/12, rotateB: Math.PI/12 },
-      dotscreen: { scale: 1.5, angle: 1.2 },
-      vignette: { intensity: 0.3 },
-    };
+    this.composer = new EffectComposer(renderer);
+    this.renderPass = new RenderPass(scene, camera);
+    this.outputPass = new OutputPass();
+    this.effects = [];
+    this.rebuildChain();
   }
 
-  initComposerIfNeeded() {
-    if (this.composer) return;
-
-    // TODO: import your composer + passes at top, then build chain here.
-    // Keep this method small and deterministic.
-
-    // Example skeleton:
-    // this.composer = new EffectComposer(this.renderer);
-    // this.passes.render = new RenderPass(this.scene, this.camera);
-    // this.composer.addPass(this.passes.render);
-
-    // Add final AA pass (FXAA or SMAA) at end for kiosk clarity.
+  addEffect(pass, params = {}) {
+    this.effects.push({ pass, enabled: true, params });
+    this.rebuildChain();
   }
 
-  setSize(w, h, dpr = 1) {
-    this.size.set(w, h);
-    this.dpr = dpr;
-    if (this.composer) this.composer.setSize(w, h);
-    // if using FXAA: update resolution uniform here
+  removeEffect(index) {
+    this.effects.splice(index, 1);
+    this.rebuildChain();
   }
 
-  setMode(mode) {
-    this.mode = mode;
-    this.enabled = mode !== "none";
-    this.initComposerIfNeeded();
+  toggleEffect(index, enabled) {
+    this.effects[index].enabled = enabled;
+    this.effects[index].pass.enabled = enabled;
+    this.rebuildChain();
+  }
+
+  reorderEffects(newOrder) {
+    this.effects = newOrder.map(i => this.effects[i]);
     this.rebuildChain();
   }
 
   rebuildChain() {
-    if (!this.composer) return;
-    // clear passes except render pass
-    // (some composers don’t have removeAll; rebuild a new composer is fine)
+    this.composer.reset();
+    this.composer.addPass(this.renderPass);
+    this.effects.forEach(({ pass, enabled }) => {
+      if (enabled) this.composer.addPass(pass);
+    });
+    this.composer.addPass(this.outputPass);
   }
 
   render(delta) {
-    if (!this.enabled || !this.composer) {
-      this.renderer.render(this.scene, this.camera);
-      return;
-    }
     this.composer.render(delta);
   }
-}
-Task 0.2 — Hook this manager into your main render loop
-In your main file (where you currently render), do:
-// after renderer/scene/camera created:
-const postFX = new PostFXManager(renderer, scene, camera);
 
-// on resize:
-postFX.setSize(width, height, renderer.getPixelRatio());
-
-// in animation loop:
-function animate(t) {
-  requestAnimationFrame(animate);
-  const dt = clock.getDelta();
-  // update scene animations here
-  postFX.render(dt);
+  setSize(width, height) {
+    this.composer.setSize(width, height);
+  }
 }
 
-1) Build the actual pass chains (Clean / Neon / Print / Glitch…)
-Task 1.1 — Implement “chain presets”
-Inside PostFXManager, implement rebuildChain() using an internal factory.
-Recommended approach: recreate composer each time for simplicity + fewer bugs.
-rebuildChain() {
-  // Destroy and rebuild to avoid pass state weirdness:
-  // (safe + simplest for kiosk app)
-  this.composer = new EffectComposer(this.renderer);
-  this.composer.setSize(this.size.x, this.size.y);
+export default PostFXManager;
 
-  const renderPass = new RenderPass(this.scene, this.camera);
-  this.composer.addPass(renderPass);
+// Usage example in main.js
+const bloom = new BloomPass({ strength: 1.5 });
+postFX.addEffect(bloom, { strength: 1.5 });
 
-  // IMPORTANT: if you use toneMapping / outputColorSpace, keep it consistent:
-  // renderer.outputColorSpace = THREE.SRGBColorSpace;
+const rgbShift = new ShaderPass(RGBShiftShader);
+rgbShift.uniforms.amount.value = 0.005;
+postFX.addEffect(rgbShift);
 
-  if (this.mode === "clean") {
-    // optional: subtle film grain or vignette later
-  }
+// Presets example
+const presets = {
+  neon: [
+    { pass: new BloomPass({ strength: 2.0 }), params: { strength: 2.0 } },
+    { pass: new ShaderPass(RGBShiftShader), params: { amount: 0.01 } }
+  ]
+};
+// Load preset: presets.neon.forEach(e => postFX.addEffect(e.pass, e.params));
 
-  if (this.mode === "neon") {
-    const bloomPass = new UnrealBloomPass(
-      new THREE.Vector2(this.size.x, this.size.y),
-      this.settings.bloom.strength,
-      this.settings.bloom.radius,
-      this.settings.bloom.threshold
-    );
-    this.composer.addPass(bloomPass);
-  }
-
-  if (this.mode === "afterimage") {
-    const afterPass = new AfterimagePass();
-    afterPass.uniforms.damp.value = this.settings.afterimage.damp;
-    this.composer.addPass(afterPass);
-  }
-
-  if (this.mode === "glitch") {
-    const glitch = new GlitchPass();
-    glitch.goWild = this.settings.glitch.wild;
-    this.composer.addPass(glitch);
-  }
-
-  if (this.mode === "halftone") {
-    const halftone = new HalftonePass(this.size.x, this.size.y, {
-      radius: this.settings.halftone.radius,
-      rotateR: this.settings.halftone.rotateR,
-      rotateG: this.settings.halftone.rotateG,
-      rotateB: this.settings.halftone.rotateB,
-    });
-    this.composer.addPass(halftone);
-  }
-
-  if (this.mode === "dotscreen") {
-    const dot = new DotScreenPass(
-      new THREE.Vector2(0, 0),
-      this.settings.dotscreen.angle,
-      this.settings.dotscreen.scale
-    );
-    this.composer.addPass(dot);
-  }
-
-  // Add RGB shift as an accent in some modes
-  if (this.mode === "neon" || this.mode === "glitch") {
-    const rgb = new ShaderPass(RGBShiftShader);
-    rgb.uniforms.amount.value = this.settings.rgbShift.amount;
-    this.composer.addPass(rgb);
-  }
-
-  // Add Film pass optionally (grain/scanlines)
-  if (this.mode === "crt" || this.mode === "neon") {
-    const film = new FilmPass(
-      this.settings.film.noise,
-      this.settings.film.scanlines,
-      this.settings.film.scanlineCount,
-      this.settings.film.grayscale
-    );
-    this.composer.addPass(film);
-  }
-
-  // Final AA: FXAA (fast) or SMAA (nicer)
-  const fxaa = new ShaderPass(FXAAShader);
-  fxaa.material.uniforms.resolution.value.set(
-    1 / (this.size.x * this.dpr),
-    1 / (this.size.y * this.dpr)
-  );
-  this.composer.addPass(fxaa);
-
-  // Optional: gamma correction at very end if needed
-  // const gamma = new ShaderPass(GammaCorrectionShader);
-  // this.composer.addPass(gamma);
+// FPS monitoring (new)
+let fps = 0, lastTime = performance.now();
+function updateFPS() {
+  const now = performance.now();
+  fps = 1000 / (now - lastTime);
+  lastTime = now;
+  if (fps < 30) postFX.rebuildChain(); // Or disable heavy effects
 }
-Task 1.2 — Wire your existing “Render pipeline” dropdown to postFX.setMode()
-You already have a dropdown. Add options:
-	•	none
-	•	clean
-	•	neon
-	•	afterimage
-	•	halftone
-	•	dotscreen
-	•	glitch
-	•	crt
-Hook:
-renderPipelineSelect.addEventListener("change", (e) => {
-  postFX.setMode(e.target.value);
-});
+```
 
-2) Add a REAL shader-based transition between slides (signature MKRSHIFT)
-Right now you likely do a fade between images/videos. Replace with:
-	•	render current slide → rtFrom
-	•	render next slide → rtTo
-	•	full-screen transition shader blends them with noise/mask
-Task 2.1 — Add TransitionPass
-Create file: src/postfx/TransitionPass.js
-import * as THREE from "three";
+For transitions: `src/postfx/TransitionPass.js` (custom shader as per Instructions.txt).
 
-export const TransitionShader = {
+```javascript
+// src/postfx/TransitionPass.js (simplified)
+const transitionShader = {
   uniforms: {
-    tFrom: { value: null },
-    tTo: { value: null },
+    tDiffuseA: { value: null },
+    tDiffuseB: { value: null },
     progress: { value: 0 },
-    time: { value: 0 },
-    softness: { value: 0.2 }, // edge softness
-    noiseScale: { value: 2.0 },
-    rgbSplit: { value: 0.001 }, // subtle
+    time: { value: 0 }
   },
-  vertexShader: `
+  vertexShader: /* glsl */ `
     varying vec2 vUv;
-    void main(){
-      vUv = uv;
-      gl_Position = vec4(position.xy, 0.0, 1.0);
-    }
+    void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
   `,
-  fragmentShader: `
-    precision highp float;
-    varying vec2 vUv;
-    uniform sampler2D tFrom;
-    uniform sampler2D tTo;
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuseA;
+    uniform sampler2D tDiffuseB;
     uniform float progress;
     uniform float time;
-    uniform float softness;
-    uniform float noiseScale;
-    uniform float rgbSplit;
-
-    // cheap hash noise
-    float hash(vec2 p){
-      p = fract(p * vec2(123.34, 345.45));
-      p += dot(p, p + 34.345);
-      return fract(p.x * p.y);
+    varying vec2 vUv;
+    void main() {
+      vec4 colorA = texture2D(tDiffuseA, vUv);
+      vec4 colorB = texture2D(tDiffuseB, vUv);
+      gl_FragColor = mix(colorA, colorB, progress); // Add fancy effects with time
     }
-
-    void main(){
-      vec2 uv = vUv;
-
-      float n = hash(uv * noiseScale + time * 0.1);
-      float m = smoothstep(progress - softness, progress + softness, n);
-
-      // subtle chromatic split near the edge
-      float edge = abs(n - progress);
-      float split = rgbSplit * smoothstep(0.2, 0.0, edge);
-
-      vec4 a = texture2D(tFrom, uv);
-      vec4 bR = texture2D(tTo, uv + vec2(split, 0.0));
-      vec4 bG = texture2D(tTo, uv);
-      vec4 bB = texture2D(tTo, uv - vec2(split, 0.0));
-      vec4 b = vec4(bR.r, bG.g, bB.b, bG.a);
-
-      gl_FragColor = mix(a, b, m);
-    }
-  `,
+  `
 };
 
-export function createTransitionMaterial() {
-  return new THREE.ShaderMaterial({
-    uniforms: THREE.UniformsUtils.clone(TransitionShader.uniforms),
-    vertexShader: TransitionShader.vertexShader,
-    fragmentShader: TransitionShader.fragmentShader,
-    depthTest: false,
-    depthWrite: false,
+// In PostFXManager or separate: Use ShaderPass(transitionShader)
+```
+
+## 3. UI/UX Enhancements (Sidebar and Controls)
+Install `dat.gui`. In `src/main.js` or `src/ui.js`:
+
+```javascript
+// src/ui.js
+import * as dat from 'dat.gui';
+
+const gui = new dat.GUI({ width: 300 });
+gui.domElement.id = 'gui';
+document.body.appendChild(gui.domElement);
+
+// Effects folder example
+const effectsFolder = gui.addFolder('Effects Stack');
+function updateEffectsGUI() {
+  // Clear and rebuild controls as in previous responses
+  postFX.effects.forEach((effect, index) => {
+    const folder = effectsFolder.addFolder(effect.pass.name || `Effect ${index}`);
+    folder.add(effect, 'enabled').onChange(() => postFX.toggleEffect(index, effect.enabled));
+    // Add params, up/down buttons
   });
 }
-Task 2.2 — Render slides into render targets
-Where you currently draw “the slide”, do:
-const rtA = new THREE.WebGLRenderTarget(w, h, { depthBuffer: false });
-const rtB = new THREE.WebGLRenderTarget(w, h, { depthBuffer: false });
 
-function renderSlideToTarget(slideIndex, target) {
-  renderer.setRenderTarget(target);
-  renderer.clear(true, true, true);
-
-  // show slideIndex content (image/video plane / dots geometry / etc)
-  // render that scene normally
-  renderer.render(scene, camera);
-
-  renderer.setRenderTarget(null);
-}
-Task 2.3 — Use full-screen quad with Transition shader during transitions
-Create an overlay scene:
-const transitionScene = new THREE.Scene();
-const transitionCam = new THREE.OrthographicCamera(-1,1,1,-1,0,1);
-
-const mat = createTransitionMaterial();
-const quad = new THREE.Mesh(new THREE.PlaneGeometry(2,2), mat);
-transitionScene.add(quad);
-
-let transitioning = false;
-let t0 = 0;
-let dur = 2.2;
-
-function startTransition(fromIndex, toIndex, durationSec) {
-  dur = durationSec;
-  transitioning = true;
-  t0 = performance.now();
-
-  renderSlideToTarget(fromIndex, rtA);
-  renderSlideToTarget(toIndex, rtB);
-
-  mat.uniforms.tFrom.value = rtA.texture;
-  mat.uniforms.tTo.value = rtB.texture;
-  mat.uniforms.progress.value = 0;
-}
-In your render loop:
-if (transitioning) {
-  const t = (performance.now() - t0) / 1000;
-  const p = Math.min(1, t / dur);
-
-  mat.uniforms.progress.value = p;
-  mat.uniforms.time.value = t;
-
-  renderer.setRenderTarget(null);
-  renderer.render(transitionScene, transitionCam);
-
-  if (p >= 1) transitioning = false;
-} else {
-  postFX.render(dt);
-}
-Now your existing “Transition (sec)” UI controls something real.
-
-3) Add “signature MKRSHIFT effects” that match your current style
-Task 3.1 — Selective Bloom for logo/dots only (keeps UI/text crisp)
-Do bloom on a separate layer:
-	•	Put glow objects (dots/logo plane) on layer 1
-	•	Render bloom pass using a second camera or temporarily switch layers
-Codex task:
-	1	Add glowLayer = 1
-	2	Make dots mesh: mesh.layers.enable(glowLayer)
-	3	During bloom render, set camera layers and/or use selective bloom pattern.
-If you want the simplest version: apply bloom to whole scene but keep strength modest.
-Task 3.2 — Afterimage trails mode for dots animation
-You already have dot motion. Add “Afterimage” pipeline preset. Make UI slider Trail control afterPass.uniforms.damp.
-afterPass.uniforms.damp.value = uiTrail; // 0.85..0.97
-Task 3.3 — Print modes (Halftone + DotScreen) for campaign moments
-Add presets:
-	•	Poster Halftone
-	•	Newsprint Dots
-Use HalftonePass and DotScreenPass modes.
-
-4) Add a “shader sandbox” dropdown for your Media Shader (keep your current pipeline)
-From your screenshot you already have Render pipeline: Media shader. Keep it, but extend the shader.
-Task 4.1 — Upgrade the media shader to support these toggles:
-	•	Vignette
-	•	Barrel distortion
-	•	Subtle grain
-	•	Scanline (optional)
-	•	Chromatic split (very subtle)
-	•	Edge sharpen (for logos/text)
-Fragment shader snippet you can paste into your existing media shader:
-// --- Add uniforms:
-uniform float uVignette;   // 0..1
-uniform float uGrain;      // 0..1
-uniform float uSharpen;    // 0..1
-uniform float uChromAb;    // 0..0.01
-
-float rand(vec2 co){
-  return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
-}
-
-vec3 sharpen(sampler2D tex, vec2 uv, vec2 px, float amount){
-  vec3 c = texture2D(tex, uv).rgb;
-  vec3 n = texture2D(tex, uv + vec2(0.0, px.y)).rgb;
-  vec3 s = texture2D(tex, uv - vec2(0.0, px.y)).rgb;
-  vec3 e = texture2D(tex, uv + vec2(px.x, 0.0)).rgb;
-  vec3 w = texture2D(tex, uv - vec2(px.x, 0.0)).rgb;
-  vec3 edge = (n + s + e + w) * 0.25 - c;
-  return c - edge * amount;
-}
-
-// --- In main():
-vec2 px = vec2(1.0/uResolution.x, 1.0/uResolution.y);
-
-// Chromatic aberration
-vec2 ca = (vUv - 0.5) * uChromAb;
-vec3 col;
-col.r = texture2D(uTex, vUv + ca).r;
-col.g = texture2D(uTex, vUv).g;
-col.b = texture2D(uTex, vUv - ca).b;
-
-// Sharpen
-col = mix(col, sharpen(uTex, vUv, px, 1.0), uSharpen);
-
-// Vignette
-float d = distance(vUv, vec2(0.5));
-float vig = smoothstep(0.8, 0.2, d);
-col *= mix(1.0, vig, uVignette);
-
-// Grain
-float g = rand(vUv * uTime) - 0.5;
-col += g * uGrain * 0.08;
-
-gl_FragColor = vec4(col, 1.0);
-Wire to UI sliders.
-
-5) Add “Presets” (so you can quickly switch looks on kiosks)
-Task 5.1 — Define preset JSON and apply it
-const PRESETS = {
-  CleanKiosk: {
-    pipeline: "clean",
-    transition: { sec: 1.4, softness: 0.18, noiseScale: 2.0 },
-    tone: { brightness: 0, contrast: 1, saturation: 1, gamma: 1 },
-  },
-  MKRShiftNeon: {
-    pipeline: "neon",
-    bloom: { strength: 0.9, radius: 0.35, threshold: 0.82 },
-    transition: { sec: 2.2, softness: 0.22, noiseScale: 2.4, rgbSplit: 0.0018 },
-  },
-  PrintPoster: {
-    pipeline: "halftone",
-    transition: { sec: 1.6, softness: 0.15, noiseScale: 3.0 },
-  },
-  EnergyTrails: {
-    pipeline: "afterimage",
-    afterimage: { damp: 0.92 },
-  }
-};
-
-function applyPreset(p) {
-  if (p.pipeline) postFX.setMode(p.pipeline);
-  if (p.bloom) Object.assign(postFX.settings.bloom, p.bloom);
-  if (p.afterimage) Object.assign(postFX.settings.afterimage, p.afterimage);
-  // also update transition shader uniforms if using TransitionPass
-  // update UI controls to match
-}
-Add a preset dropdown in your settings panel.
-
-6) Performance + kiosk stability tasks (do these, it matters)
-Task 6.1 — Cap DPR (huge win on 4K screens)
-const DPR_CAP = 1.5; // kiosk safe
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, DPR_CAP));
-Task 6.2 — Pause heavy passes when UI is hidden OR tab is hidden
-document.addEventListener("visibilitychange", () => {
-  const hidden = document.hidden;
-  postFX.enabled = !hidden;
+// Theme toggle (new)
+gui.add({ theme: 'dark' }, 'theme', ['dark', 'light']).onChange(theme => {
+  document.body.classList.toggle('light-theme', theme === 'light');
 });
-Task 6.3 — Video texture update only when frame changes
-If using <video> as texture, prefer requestVideoFrameCallback:
-if ("requestVideoFrameCallback" in HTMLVideoElement.prototype) {
-  video.requestVideoFrameCallback(function tick(){
-    videoTex.needsUpdate = true;
-    video.requestVideoFrameCallback(tick);
-  });
-} else {
-  // fallback: update every frame (ok, but heavier)
-}
+```
 
-7) UX polishing based on your screenshot
-Task 7.1 — Add an “Effects” group under Color & Tone
-Add sliders for:
-	•	Bloom strength
-	•	Trail damp
-	•	Grain amount
-	•	Vignette
-	•	Chromatic split
-	•	Transition softness
-Wire to:
-	•	postFX.settings.*
-	•	transitionShader.uniforms.*
-Task 7.2 — Add “safe defaults” for text/logo slides
-If slide is text/logo (sharp edges), force:
-	•	pipeline = clean or neon (low bloom)
-	•	disable heavy distortion
+For sortablejs reordering (install `sortablejs`):
 
-8) Smoke-check checklist (run after each change)
-Codex: After implementing each section, do:
-	1	App boots without console errors
-	2	Render pipeline dropdown changes effect live
-	3	Transition plays and ends correctly
-	4	Fullscreen + Hide UI still works
-	5	Drag/drop media still works
-	6	At least one demo slide plays
+```javascript
+import Sortable from 'sortablejs';
+// Assume HTML <ul id="effects-list"> populated dynamically
+Sortable.create(document.getElementById('effects-list'), {
+  onEnd: evt => {
+    const newOrder = [...effectsList.children].map(li => parseInt(li.dataset.index));
+    postFX.reorderEffects(newOrder);
+  }
+});
+```
 
-Quick recommended pipeline mapping for your UI dropdown
-Add these items to your “Render pipeline”:
-	•	Media shader (your current)
-	•	Clean (Composer)
-	•	Neon Bloom
-	•	Afterimage Trails
-	•	Print Halftone
-	•	DotScreen (Newsprint)
-	•	Glitch Accent
-	•	CRT Light (FilmPass)
+## 4. Layer-Based Design System
+Core: `src/layers/LayerManager.js`. Integrate: `const layerManager = new LayerManager(scene);`
 
-—————————————————
-Below is a Codex-ready task list to fix MP4/WebM video + GIFs stuck on first frame and make playback solid for a kiosk/digital-signage setup.
-The two most common causes are:
-	1	Autoplay restrictions: video.play() is getting blocked (must be muted + usually needs a user gesture once). play()returns a Promise and will reject when blocked. (MDN Web Docs)
-	2	Wrong texture type / no updates: using THREE.Texture(video) (static) instead of THREE.VideoTexture(video), or using createImageBitmap() on GIF/video (often yields only first frame).
+```javascript
+// src/layers/LayerManager.js
+import * as THREE from 'three';
+import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+import { USDZLoader } from 'three-usdz-loader'; // For 3D
 
-✅ Task List: Fix VIDEO playback (MP4/WebM)
-1) Replace any “video as image texture” with THREE.VideoTexture
-Search for: new THREE.Texture(video) or TextureLoader on video, or createImageBitmap(video).
-Use this helper:
-import * as THREE from "three";
-
-export async function createVideoSourceFromFile(file) {
-  const url = URL.createObjectURL(file);
-
-  const video = document.createElement("video");
-  video.src = url;
-
-  // kiosk-friendly defaults
-  video.muted = true;             // muted autoplay is generally allowed
-  video.loop = true;
-  video.playsInline = true;       // important for iOS/Safari inline playback
-  video.autoplay = true;
-  video.preload = "auto";
-
-  // For Safari/iOS quirks:
-  video.setAttribute("playsinline", "");
-  video.setAttribute("webkit-playsinline", "");
-
-  // Wait until the browser has enough data to start
-  await new Promise((resolve, reject) => {
-    const onReady = () => resolve();
-    const onErr = (e) => reject(e);
-    video.addEventListener("canplay", onReady, { once: true });
-    video.addEventListener("error", onErr, { once: true });
-    video.load();
-  });
-
-  // Try to play; if blocked, you MUST ask for a click/tap once
-  try {
-    await video.play(); // returns a Promise; rejects when autoplay denied
-  } catch (err) {
-    // Show “Click to start” overlay once; then call video.play() again.
-    // Autoplay failures are expected on many setups. :contentReference[oaicite:1]{index=1}
-    throw new Error("AUTOPLAY_BLOCKED");
+class LayerManager {
+  constructor(scene) {
+    this.scene = scene;
+    this.layers = [];
+    this.group = new THREE.Group();
+    this.mixers = [];
+    this.scene.add(this.group);
+    this.fonts = {}; // For multiple fonts
+    this.loadFont('default', '/fonts/helvetiker_regular.typeface.json');
   }
 
-  const texture = new THREE.VideoTexture(video);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.minFilter = THREE.LinearFilter;
-  texture.magFilter = THREE.LinearFilter;
-  texture.generateMipmaps = false;
+  async loadFont(name, url) {
+    const loader = new FontLoader();
+    this.fonts[name] = await loader.loadAsync(url);
+  }
 
-  return {
-    kind: "video",
-    video,
-    texture,
-    url,
-    dispose() {
-      try { video.pause(); } catch {}
-      video.removeAttribute("src");
-      video.load();
-      URL.revokeObjectURL(url);
-      texture.dispose();
-    },
-  };
+  async addLayer(type, params = {}) {
+    let object;
+    const color = params.color ? new THREE.Color(params.color) : new THREE.Color(0xffffff);
+    switch (type) {
+      case 'background':
+        object = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.MeshBasicMaterial({ color }));
+        if (params.textureUrl) object.material.map = new THREE.TextureLoader().load(params.textureUrl);
+        break;
+      case 'text':
+        const font = this.fonts[params.font || 'default'];
+        if (!font) await this.loadFont('default');
+        const geometry = new TextGeometry(params.text || 'Text', { font, size: params.size || 0.1, depth: 0.01 });
+        object = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color }));
+        break;
+      case 'overlay':
+        object = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.MeshBasicMaterial({
+          color, transparent: true, opacity: params.opacity || 0.5, blending: THREE.AdditiveBlending
+        }));
+        if (params.gradient) {
+          object.material = new THREE.ShaderMaterial({
+            uniforms: { color1: { value: new THREE.Color(params.color1 || '#000') }, color2: { value: new THREE.Color(params.color2 || '#fff') } },
+            vertexShader: /* as before */,
+            fragmentShader: /* as before */
+          });
+        }
+        break;
+      case '3dmodel':
+        const loader = new USDZLoader();
+        const group = new THREE.Group();
+        const loadedModel = params.url ? await loader.load(params.url, group) : await loader.loadFile(params.file, group);
+        if (params.modelColor) group.traverse(child => { if (child.material) child.material.color.set(new THREE.Color(params.modelColor)); });
+        if (loadedModel.animations?.length) {
+          const mixer = new THREE.AnimationMixer(group);
+          loadedModel.animations.forEach(clip => mixer.clipAction(clip).play());
+          this.mixers.push(mixer);
+        }
+        object = group;
+        break;
+      // Add cases for image, shape, video (VideoTexture)
+    }
+    object.position.set(params.x || 0, params.y || 0, params.z || 0);
+    object.userData.layerIndex = this.layers.length;
+    this.layers.push({ object, type, params, zOrder: this.layers.length });
+    this.group.add(object);
+    this.sortLayers();
+  }
+
+  updateLayer(index, newParams) {
+    const layer = this.layers[index];
+    Object.assign(layer.params, newParams);
+    // Type-specific updates as in previous responses
+    if (newParams.color) layer.object.material.color.set(new THREE.Color(newParams.color));
+    // For dynamic text/dataSource: if (layer.params.dataSource) fetch(layer.params.dataSource).then(data => update text)
+  }
+
+  // removeLayer, reorderLayers, sortLayers, update(delta for mixers) as before
+  // Templates (new): function loadTemplate(name) { /* addLayers for preset */ }
 }
-2) Add a single “Click to Start Playback” gate (kiosk safe)
-If you ever get AUTOPLAY_BLOCKED, do this once:
-function showTapToStartOverlay(onStart) {
-  const overlay = document.createElement("div");
-  overlay.style.cssText = `
-    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
-    background:rgba(0,0,0,0.65); z-index:999999; color:white; font:600 18px/1.2 system-ui;
-    cursor:pointer;
-  `;
-  overlay.textContent = "Click to start playback";
-  overlay.addEventListener("click", async () => {
-    overlay.remove();
-    await onStart();
-  }, { once: true });
-  document.body.appendChild(overlay);
+
+export default LayerManager;
+```
+
+GUI integration as in Section 3, with color pickers via `folder.addColor(layer.params, 'color').onChange(...)`.
+
+## 5. 3D Model Support
+Included in LayerManager above. For TinyUSDZ alternative: Create custom loader class, similar structure.
+
+## 6. Drag-and-Drop Component Drawer, Snapping, and Precision
+HTML as in response. Code:
+
+```javascript
+// Drag-drop
+import Sortable from 'sortablejs';
+// Setup as in previous
+canvas.addEventListener('drop', evt => {
+  const type = evt.dataTransfer.getData('text/plain');
+  const rect = canvas.getBoundingClientRect();
+  let x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+  let y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+  x = snapToGrid(x); y = snapToGrid(y); // Snapping
+  layerManager.addLayer(type, { x, y });
+});
+
+// Snapping
+function snapToGrid(value, step = 0.05) {
+  return Math.round(value / step) * step;
 }
-Then in your video load flow:
-let src;
-try {
-  src = await createVideoSourceFromFile(file);
-} catch (e) {
-  if (String(e.message).includes("AUTOPLAY_BLOCKED")) {
-    showTapToStartOverlay(async () => {
-      src = await createVideoSourceFromFile(file); // or retry play on existing element
-      // attach src.texture to your shader/material here
+
+// Precision/selection
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+// Click listener as before
+
+// Gizmos (advanced)
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
+const transformControls = new TransformControls(camera, renderer.domElement);
+scene.add(transformControls);
+// On select: transformControls.attach(layer.object);
+```
+
+## 7. Playlist and Slide Management
+Assume `playlist = []`; each item: `{ layers: [], effects: [], timing: 10 }`.
+
+```javascript
+// Autoplay
+let autoplayInterval;
+function startAutoplay() {
+  autoplayInterval = setInterval(() => {
+    currentSlideIndex = (currentSlideIndex + 1) % playlist.length;
+    loadSlide(playlist[currentSlideIndex]);
+  }, transitionSec * 1000);
+}
+
+function loadSlide(slide) {
+  layerManager.clear();
+  slide.layers.forEach(l => layerManager.addLayer(l.type, l.params));
+  // Similar for effects
+}
+
+// Persistence (new)
+function savePlaylist() {
+  const data = JSON.stringify(playlist);
+  localStorage.setItem('playlist', data);
+  // Or download as file
+}
+
+function loadPlaylist() {
+  const data = localStorage.getItem('playlist');
+  if (data) playlist = JSON.parse(data);
+}
+```
+
+## 8. Kiosk Mode
+```javascript
+let isKiosk = false;
+function toggleKiosk(enable) {
+  isKiosk = enable;
+  const elem = document.documentElement;
+  if (enable) {
+    elem.requestFullscreen();
+    document.getElementById('gui').style.display = 'none';
+    document.getElementById('component-drawer').style.display = 'none';
+    canvas.style.pointerEvents = 'none';
+    startAutoplay();
+    // Idle restart (new): setTimeout(() => loadSlide(0), idleTime);
+  } else {
+    document.exitFullscreen();
+    // Show UI, stop autoplay
+  }
+}
+// Event listeners as before
+```
+
+## 9. Code Quality, Testing, and Security
+- TypeScript: Add `tsconfig.json`, rename files.
+- Testing (Vitest): `npm i vitest -D`
+  ```javascript
+  // tests/postfx.test.js
+  import { describe, it, expect } from 'vitest';
+  describe('PostFXManager', () => {
+    it('adds effect', () => {
+      // Mock and test
     });
-    return;
+  });
+  ```
+- Security: In addLayer for uploads: `if (file.type !== 'image/jpeg') return;`
+
+## 10. Deployment, Export, and Advanced
+- Export: Use `renderer.domElement.toDataURL('image/png')` for images.
+- CI/CD: `.github/workflows/build.yml` with npm install/build.
+- Animations (GSAP): `npm i gsap`; `gsap.to(layer.object.position, { x: 1, duration: 2 });`
+
+This guide provides the code backbone—implement step-by-step, test often. For full files or specifics
+
+
+Extra ai functions
+
+### Adding AI Agent Support to MKRSHIFT-AD-Panel
+
+Hey Cris (@cris_k_b), great idea to expand your digital signage app into interactive kiosks with AI agents! Based on the image you shared (a 3D avatar like "June" on a kiosk screen) and the Ayubots link, I see this as integrating virtual assistants that can converse naturally, handle queries, and display animated avatars. This fits perfectly as a new "agent" layer in your `LayerManager.js`, where the agent could be a 3D model or video feed, powered by AI APIs for voice/text interaction.
+
+From researching Ayubots and broader AI agent options, Ayubots is a paid service focused on lifelike 3D agents for customer service, but it lacks explicit APIs—it's more plug-and-play via browser embedding. For flexibility, we can use general AI APIs (free and paid) for the "brain" (NLP/conversation), combined with Web Speech API for voice and Three.js for visuals. This allows customizable agents without vendor lock-in.
+
+I'll outline AI features you can add, free/paid API options, and code to integrate into your app. This builds on our roadmap: Add to the layer system, UI drawer (draggable 'agent' component), and kiosk mode (for hands-off deployment).
+
+#### Key AI Features to Implement
+These enhance your app for interactive info screens/kiosks:
+- **Conversational Interaction**: Natural language processing (NLP) for user queries (e.g., "What's the flight status?") via text or voice.
+- **Voice Support**: Speech-to-text (STT) for input, text-to-speech (TTS) for responses. Use browser APIs for free basics.
+- **Avatar Display**: 3D animated model (load GLTF/USDZ) with lip-sync/expressions, or 2D video fallback.
+- **Adaptation/Learning**: Agents improve via API fine-tuning or conversation history.
+- **Use Cases**: Retail (product info), healthcare (appointments), airports (wayfinding)—like Ayubots examples.
+- **Customization**: Per-slide agents with roles (e.g., greeter, FAQ bot); integrate with your effects (e.g., bloom for glowy avatar).
+- **Technical Notes**: Requires microphone/camera permissions; fallback to text chat. For privacy, anonymize data (e.g., via API4AI's anonymization).
+
+#### Free and Paid AI API Options
+I focused on APIs suitable for kiosks/agents: Conversational (chatbots), voice-enabled, and integrable with web apps. Prioritize ones with easy JS SDKs.
+
+**Free Options** (Good for prototyping; limits on usage):
+- **Google AI Studio (via Gemini API)**: Free tier with generous limits (e.g., 1,500 requests/day). Features: Multimodal NLP, conversation context, TTS/STT integration. Use for adaptive agents. SDK: JS client. 
+- **Hugging Face Inference API**: Free for open models (e.g., DialoGPT for chat). Features: NLP, custom models for agents. Limits: Rate-based (e.g., 100 calls/hour). SDK: JS via `@huggingface/inference`. Great for open-source avatars. 
+- **Rasa Open Source**: Fully free/open-source framework for building conversational agents. Features: NLP, intent recognition, dialogue management. Run locally or on server. SDK: JS integration via REST. Ideal for custom kiosks. 
+- **Dialogflow (Google)**: Free tier (up to 180 requests/minute). Features: Voice agents, integrations with Web Speech. SDK: JS. 
+- **AgentGPT/SuperAGI (Open-Source)**: Free browser-based platforms for deploying agents. Features: Autonomous tasks, web integration. Host yourself for no cost.  
+- **Cloudflare Workers AI**: Free tier for edge-deployed models. Features: Fast NLP for low-latency kiosks. 
+
+**Paid Options** (Scalable for production; usage-based or subscription):
+- **Ayubots**: Starts at ~$60/agent/month (no free tier). Features: 3D animated agents, real-time voice, machine learning adaptation, contextual responses. Integration: Browser-based embed (iframe in your app); train via conversation (no code needed). Use cases: Retail/healthcare kiosks. Technical: Requires internet; deploy on kiosks. 
+- **OpenAI GPT-4 API**: Usage-based (~$0.03/1K tokens). Features: Advanced NLP, function calling for agents, TTS/STT add-ons. SDK: JS. Customizable for kiosk queries.  
+- **Microsoft Power Virtual Agents (Azure)**: Starts at ~$200/month for premium. Features: Bot building, voice integration, enterprise security. SDK: JS. 
+- **Stack AI**: Free plan (500 runs/month), paid from $11.25/month. Features: No-code agent builder with API integrations. 
+- **API4AI**: Usage-based (e.g., pay-per-call for OCR/face detection). Features: Document reading, face analysis for kiosks (e.g., ID verification). SDK: JS. Complements agents for tasks like check-ins. 
+- **hrPad (CloudApper)**: Subscription-based (pricing on request). Features: AI agents for HR kiosks, no-code platform. 
+
+Recommendations: Start with free (Hugging Face + Web Speech for voice) for dev. For production, use OpenAI for robust NLP or Ayubots for ready-made 3D agents.
+
+#### Code Implementation
+Add as a new layer type in `src/layers/LayerManager.js`. Use Web Speech API (free, browser-native) for voice. For AI, integrate an API (e.g., OpenAI or Hugging Face). Avatar: Load a 3D model (extend your USDZ support) or embed iframe for services like Ayubots.
+
+1. **Update LayerManager.js** (Add 'agent' type):
+   ```javascript
+   // ... existing imports
+   import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'; // For avatar models
+
+   class LayerManager {
+     // ... existing
+
+     async addLayer(type, params = {}) {
+       // ... existing cases
+
+       case 'agent':
+         const group = new THREE.Group();
+         // Load avatar model (e.g., free GLTF from sites like Sketchfab)
+         if (params.avatarUrl) {
+           const loader = new GLTFLoader();
+           const gltf = await loader.loadAsync(params.avatarUrl);
+           group.add(gltf.scene);
+           // Add animations if present (similar to 3dmodel)
+         } else {
+           // Fallback: Simple plane with video texture for streamed agent
+           const video = document.createElement('video');
+           video.src = params.videoUrl; // E.g., Ayubots embed if available
+           video.autoplay = true;
+           const texture = new THREE.VideoTexture(video);
+           const material = new THREE.MeshBasicMaterial({ map: texture });
+           const plane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1.5), material); // Humanoid size
+           group.add(plane);
+         }
+         group.position.set(params.x || 0, params.y || 0, params.z || 0);
+         // Store API config (e.g., { api: 'openai', key: 'your-key' })
+         group.userData.agentConfig = params.agentConfig || { api: 'huggingface', model: 'DialoGPT-medium' };
+         object = group;
+         this.initAgentInteraction(group); // Setup voice/chat
+         break;
+     }
+
+     initAgentInteraction(agentObject) {
+       // Web Speech for STT/TTS
+       const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+       recognition.onresult = async (event) => {
+         const query = event.results[0][0].transcript;
+         const response = await this.getAIResponse(agentObject.userData.agentConfig, query);
+         this.speak(response); // TTS
+         // Update avatar (e.g., lip-sync animation)
+       };
+       recognition.start(); // Or trigger on button/touch
+
+       // Fallback text input: Add UI element if needed
+     }
+
+     async getAIResponse(config, query) {
+       let response = 'Hello! How can I help?';
+       if (config.api === 'openai') {
+         const res = await fetch('https://api.openai.com/v1/chat/completions', {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.key}` },
+           body: JSON.stringify({ model: 'gpt-4o-mini', messages: [{ role: 'user', content: query }] })
+         });
+         const data = await res.json();
+         response = data.choices[0].message.content;
+       } else if (config.api === 'huggingface') {
+         const res = await fetch(`https://api-inference.huggingface.co/models/${config.model}`, {
+           method: 'POST',
+           headers: { 'Authorization': `Bearer ${config.key || 'free-token-if-any'}` },
+           body: JSON.stringify({ inputs: query })
+         });
+         const data = await res.json();
+         response = data[0].generated_text;
+       }
+       // Add for other APIs (e.g., Google Gemini: similar fetch)
+       return response;
+     }
+
+     speak(text) {
+       const utterance = new SpeechSynthesisUtterance(text);
+       speechSynthesis.speak(utterance);
+     }
+
+     // In update(delta): Update animations/lip-sync if advanced
+   }
+   ```
+
+2. **UI Integration** (dat.gui or drawer):
+   - Add 'agent' to drawer list: `<li data-type="agent" draggable="true">AI Agent</li>`
+   - In GUI: Folder with api dropdown (openai/huggingface), key input, avatarUrl.
+
+3. **Kiosk Mode Tweaks**:
+   - In toggleKiosk: Enable microphone, start recognition.
+
+4. **Ayubots-Specific**:
+   - Embed as iframe layer: In addLayer, if params.service === 'ayubots', create plane with canvas texture, draw iframe content (or use CSS3DRenderer for HTML overlays in Three.js).
+
+Start with free APIs for testing—add your OpenAI key in params. For 3D avatars, download free models (e.g., from Mixamo). If you need tweaks for specific APIs or voice lip-sync code, share more details!
+
+
+
+extra Typography motion effect
+### Adding a Typography Component with Motion Effects
+
+Based on our ongoing development of MKRSHIFT-AD-Panel, I'll interpret "Typography component with motion effects" as enhancing your text layers to include animated typography—perfect for dynamic ads, info screens, or agent subtitles (e.g., animated text appearing with the AI agent's speech). This builds on the layer system: We'll extend the 'text' layer type in `LayerManager.js` to support motion effects like fade-in, slide, bounce, or typing animations. For smooth motions, we'll use Three.js's built-in Tween.js (from addons) or GSAP (external lib for more complex effects).
+
+This adds interactivity and visual appeal, e.g., text that "types" out or pulses. It integrates with your drag-drop drawer (draggable 'typography' component), GUI controls, and render loop.
+
+#### 1. **Installation and Setup**
+- **Add Dependencies**:
+  - Tween.js: Already in Three.js addons—no install needed.
+  - Optional: GSAP for advanced (e.g., easing, timelines): `npm i gsap`.
+- **Update vite.config.js** (if needed for GSAP): Ensure imports work.
+
+#### 2. **Extend LayerManager for Motion Effects**
+Update `src/layers/LayerManager.js` to handle animations on text layers. Add a `motion` param (e.g., { type: 'fadeIn', duration: 2, easing: 'easeOut' }). Use Tween for simple, GSAP for complex.
+
+```javascript
+// src/layers/LayerManager.js
+import * as THREE from 'three';
+import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+import { Tween, Easing } from 'three/addons/animation/Tween.js'; // For basic
+// Optional: import gsap from 'gsap';
+
+class LayerManager {
+  // ... existing constructor, etc.
+  // Add this.tweens = []; for managing animations
+
+  async addLayer(type, params = {}) {
+    // ... existing cases
+
+    case 'typography': // Or enhance 'text' type
+      const font = this.fonts[params.font || 'default'];
+      if (!font) await this.loadFont('default');
+      const geometry = new TextGeometry(params.text || 'Animated Text', { font, size: params.size || 0.1, depth: 0.01 });
+      const material = new THREE.MeshBasicMaterial({ color: new THREE.Color(params.color || 0xffffff) });
+      object = new THREE.Mesh(geometry, material);
+      object.position.set(params.x || 0, params.y || 0, params.z || 0);
+      object.scale.set(0, 0, 0); // Start hidden for animations
+      this.applyMotionEffect(object, params.motion || { type: 'fadeIn', duration: 1 });
+      break;
   }
-  throw e;
-}
-3) Slide switching rules (prevents “stuck first frame” + frees memory)
-When a slide becomes active:
-	•	call video.currentTime = 0 (optional)
-	•	call video.play() (retry)
-	•	attach its VideoTexture to your shader uniform
-When leaving slide:
-	•	video.pause()
-	•	optionally dispose() if not reused
 
-✅ Task List: Fix GIF playback (animated, not first-frame only)
-Choose one of these approaches:
-Option A (fast patch): Keep <img> animated and force texture updates
-This is the simplest fix if you already treat GIFs like images.
-import * as THREE from "three";
-
-export async function createGifSourceQuick(file) {
-  const url = URL.createObjectURL(file);
-
-  const img = new Image();
-  img.decoding = "async";
-  img.src = url;
-
-  await img.decode(); // decodes first frame; animation continues in <img>
-
-  const texture = new THREE.Texture(img);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.minFilter = THREE.LinearFilter;
-  texture.magFilter = THREE.LinearFilter;
-  texture.generateMipmaps = false;
-  texture.needsUpdate = true;
-
-  // Critical: GIF frames will NOT push updates into WebGL automatically.
-  // You must mark needsUpdate repeatedly.
-  let alive = true;
-  function update() {
-    if (!alive) return;
-    texture.needsUpdate = true;
-  }
-
-  return {
-    kind: "gif",
-    img,
-    texture,
-    update, // call this in your render loop (maybe throttle to 30fps)
-    dispose() {
-      alive = false;
-      URL.revokeObjectURL(url);
-      texture.dispose();
-    },
-  };
-}
-In your render loop:
-// throttle GIF updates to reduce GPU uploads
-let lastGifUpdate = 0;
-function tick(t) {
-  if (gifSource && (t - lastGifUpdate) > 33) { // ~30fps
-    gifSource.update();
-    lastGifUpdate = t;
-  }
-  renderer.render(scene, camera);
-  requestAnimationFrame(tick);
-}
-requestAnimationFrame(tick);
-✅ Pros: tiny change, usually fixes “stuck first frame” immediately ⚠️ Cons: uploads to GPU often; can be heavy if many GIFs
-
-Option B (best): Decode GIF frames and drive them yourself (smooth + efficient)
-If you want “proper signage-grade” GIF handling, decode frames and blit onto a canvas, then use THREE.CanvasTexture.
-Use gifuct-js (small, reliable). Create:
-import * as THREE from "three";
-import { parseGIF, decompressFrames } from "gifuct-js";
-
-export async function createGifSourceDecoded(file) {
-  const buf = await file.arrayBuffer();
-  const gif = parseGIF(buf);
-  const frames = decompressFrames(gif, true); // gives RGBA patches + delays
-
-  const width = gif.lsd.width;
-  const height = gif.lsd.height;
-
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-
-  const imageData = ctx.createImageData(width, height);
-
-  // Start with blank
-  ctx.clearRect(0, 0, width, height);
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.minFilter = THREE.LinearFilter;
-  texture.magFilter = THREE.LinearFilter;
-  texture.generateMipmaps = false;
-
-  let i = 0;
-  let acc = 0;
-  let alive = true;
-
-  function drawFrame(frame) {
-    // frame.patch is Uint8ClampedArray RGBA for the frame area
-    // frame.dims: { width, height, left, top }
-    const { width: fw, height: fh, left, top } = frame.dims;
-
-    // Put patch into ImageData at correct offset
-    // Easiest: create temp ImageData for patch then putImageData
-    const patch = new ImageData(frame.patch, fw, fh);
-    ctx.putImageData(patch, left, top);
-
-    texture.needsUpdate = true;
-  }
-
-  function update(dtMs) {
-    if (!alive) return;
-    acc += dtMs;
-
-    // delay is in hundredths of a second in many GIFs; gifuct gives ms-ish delay per frame
-    const delay = Math.max(20, frames[i].delay || 100); // clamp for “0 delay” gifs
-    if (acc >= delay) {
-      acc = acc % delay;
-      drawFrame(frames[i]);
-      i = (i + 1) % frames.length;
+  applyMotionEffect(object, motion) {
+    switch (motion.type) {
+      case 'fadeIn':
+        // Using Tween.js
+        const tween = new Tween(object.scale)
+          .to({ x: 1, y: 1, z: 1 }, motion.duration * 1000)
+          .easing(Easing.Quadratic.Out) // Or motion.easing
+          .start();
+        this.tweens.push(tween);
+        break;
+      case 'slideIn':
+        object.position.x = -2; // Start off-screen
+        new Tween(object.position)
+          .to({ x: 0 }, motion.duration * 1000)
+          .easing(Easing.Bounce.Out)
+          .start();
+        break;
+      case 'bounce':
+        new Tween(object.scale)
+          .to({ x: 1.2, y: 1.2, z: 1.2 }, 500)
+          .yoyo(true) // Back and forth
+          .repeat(Infinity)
+          .easing(Easing.Elastic.Out)
+          .start();
+        break;
+      case 'typing':
+        // Simulate typing: Update text progressively
+        const fullText = object.geometry.parameters.text;
+        object.geometry = new TextGeometry('', object.geometry.parameters.options); // Start empty
+        let charIndex = 0;
+        const interval = setInterval(() => {
+          if (charIndex >= fullText.length) clearInterval(interval);
+          const partialText = fullText.slice(0, ++charIndex);
+          object.geometry.dispose();
+          object.geometry = new TextGeometry(partialText, object.geometry.parameters.options);
+        }, motion.duration * 1000 / fullText.length);
+        break;
+      // Add more: rotate, pulse, etc.
+      default:
+        // No motion
     }
   }
 
-  return {
-    kind: "gif",
-    texture,
-    update, // call update(deltaMs)
-    dispose() {
-      alive = false;
-      texture.dispose();
-    },
-  };
+  update(delta) {
+    // ... existing (e.g., mixers)
+    this.tweens.forEach(t => t.update(delta * 1000)); // If using Tween.js
+  }
+
+  // In removeLayer: Stop/clear tweens for that object
 }
-In your animation loop (delta time based):
-let lastT = performance.now();
-function tick(t) {
-  const dt = t - lastT;
-  lastT = t;
+```
 
-  if (gifDecoded) gifDecoded.update(dt);
+- **GSAP Alternative** (for richer effects, e.g., timelines):
+  Replace Tween with GSAP:
+  ```javascript
+  gsap.to(object.scale, { x: 1, y: 1, z: 1, duration: motion.duration, ease: 'power2.out' });
+  ```
 
-  renderer.render(scene, camera);
-  requestAnimationFrame(tick);
-}
-requestAnimationFrame(tick);
-✅ Pros: stable timing, lower overhead, full control ⚠️ Cons: adds dependency
+#### 3. **Integrate with UI (Drawer and GUI)**
+- **Drawer**: Add to `#drawer-list`: `<li data-type="typography" draggable="true">Typography</li>`
+- **Drop Handler** (in drag-drop code): When dropped, call `layerManager.addLayer('typography', { text: 'Edit Me', motion: { type: 'fadeIn' } })`.
+- **GUI Controls**: In `updateLayersGUI()`:
+  ```javascript
+  if (layer.type === 'typography') {
+    folder.add(layer.params, 'text').onChange(text => layerManager.updateLayer(index, { text }));
+    folder.addColor(layer.params, 'color').onChange(color => layerManager.updateLayer(index, { color }));
+    folder.add(layer.params.motion, 'type', ['fadeIn', 'slideIn', 'bounce', 'typing']).onChange(type => {
+      // Reset and reapply motion
+      layer.object.scale.set(0, 0, 0); // Or appropriate reset
+      layerManager.applyMotionEffect(layer.object, layer.params.motion);
+    });
+    folder.add(layer.params.motion, 'duration', 0.5, 5, 0.1);
+    folder.add({ play: () => layerManager.applyMotionEffect(layer.object, layer.params.motion) }, 'play').name('Replay Animation');
+  }
+  ```
 
-Extra improvements (worth doing)
-A) If you sample video frames manually, use requestVideoFrameCallback
-If your pipeline needs “update only when a new frame exists” (e.g. custom canvas processing), use:
-	•	video.requestVideoFrameCallback(cb) to sync exactly to frame delivery. (MDN Web Docs)
-B) Make “Media Source” a unified interface
-Have one interface for image/video/gif:
-type MediaSource = {
-  kind: "image" | "video" | "gif";
-  texture: THREE.Texture;
-  update?: (dtMs: number) => void;
-  dispose: () => void;
-}
-Then your render loop can simply do:
-if (activeMedia?.update) activeMedia.update(dt);
-shaderUniforms.uMedia.value = activeMedia.texture;
-C) Prevent multiple videos decoding at once
-Only keep the active slide’s video playing. Pause others. This prevents CPU spikes and “first frame stuck” edge cases when tab throttling kicks in.
+#### 4. **Integration with Existing Features**
+- **Render Loop**: Call `layerManager.update(delta)` in animate() for tween updates.
+- **Per-Slide/Playlist**: Store motion params in slide JSON; reapply on loadSlide.
+- **AI Agents**: Sync with speak(): Trigger 'typing' animation on response text.
+- **Post-Processing**: Apply effects like bloom for glowing text during animation.
+- **Kiosk Mode**: Animations run automatically; no user input needed.
 
-Quick “what to change right now” checklist
-	•	 Ensure every video element has: muted=true, playsInline=true, loop=true
-	•	 Always await video.play() and handle rejection (show click-to-start) (MDN Web Docs)
-	•	 Use THREE.VideoTexture(video) not THREE.Texture(video)
-	•	 For GIFs: either (A) set texture.needsUpdate=true repeatedly, or (B) decode + CanvasTexture
-	•	 On slide change: pause previous media + dispose object URLs
+#### 5. **Testing and Enhancements**
+- Test: Run `npm run dev`, drag typography component, tweak motion in GUI—watch text animate.
+- Advanced: Add lip-sync for agents (animate based on speech phonemes) or particle effects (e.g., text explode).
+- Performance: Limit concurrent tweens; use requestAnimationFrame.
 
-—————————————
-Here’s a ship-ready UI/UX task list for MKRShift DotScreen / AD Panel, written like a product checklist you can paste into Codex or turn into GitHub issues. It’s focused on kiosk + signage realities: touch-first, “never gets stuck,” clear states, safe exits, and fast edits.
-
-1) Kiosk Mode that feels intentional (not just fullscreen)
-1.1 Enter/Exit Kiosk button + ESC exit
-	•	Add “Enter Kiosk” button (big, primary).
-	•	When enabled:
-	◦	Fullscreen on
-	◦	UI hidden
-	◦	Cursor hidden after 2s idle
-	◦	Disable accidental scroll/drag selection
-	◦	Lock editing actions unless user “Unlocks” (see 1.3)
-	•	Exit with ESC, show a small toast “Exited kiosk”.
-Acceptance:
-	•	One tap starts kiosk with no additional steps (unless browser blocks fullscreen).
-	•	ESC always exits kiosk and shows UI.
-1.2 Kiosk overlay help (non-annoying)
-	•	On kiosk enter, show a tiny 2s overlay:
-	◦	“Kiosk mode on • Press ESC to exit • Hold 2s top-right to unlock”
-	•	Then fades.
-1.3 “Hold to unlock” (prevents random touches breaking playback)
-	•	While kiosk is on: tapping shouldn’t open settings.
-	•	Add a hidden “unlock zone” (e.g., top-right corner).
-	•	Hold 2 seconds → “Unlocked” → UI becomes available.
-Acceptance: accidental taps never expose controls.
-
-2) Separate “Edit Mode” and “Playback Mode”
-Right now you have settings and playback controls mixed. Make modes explicit.
-2.1 Mode toggle
-	•	Toggle in settings header:
-	◦	Edit (UI visible, drag-drop, reorder)
-	◦	Play (minimal controls, autoplay respected)
-Acceptance: in Play mode, editing UI is gone or locked.
-2.2 Playback HUD (only what matters)
-When in Play/Kiosk, show only:
-	•	current slide title (optional)
-	•	small progress bar
-	•	subtle “Next / Prev” (optional)
-	•	tiny status icon (✅ playing / ⚠️ missing media)
-
-3) First-run onboarding that prevents confusion
-3.1 First-run wizard (one screen)
-On first visit, show a clean setup modal:
-	•	“Drop media here” (big)
-	•	Buttons:
-	◦	Add Media
-	◦	Add Text Slide
-	◦	Load Project
-	◦	Demo Playlist
-Acceptance: user can create a working playlist in <30 seconds.
-3.2 Empty state improvements
-If playlist is empty:
-	•	center message + drop zone highlight
-	•	“Add Demo” button
-	•	“Supported formats: PNG/JPG/WebP/GIF/MP4/WebM”
-
-4) Playlist UX that is signage-grade
-This is the biggest “ready to ship” category.
-4.1 Playlist thumbnails + types
-Each slide row shows:
-	•	thumbnail / icon (T for text, ▶ for video, GIF badge)
-	•	name (editable)
-	•	duration (per slide override)
-	•	“remove” and “duplicate”
-	•	drag handle for reorder (touch-friendly)
-Acceptance: reorder is obvious and easy.
-4.2 Drag reorder + multi-select
-	•	Drag handle to reorder
-	•	Shift-select / checkbox multi-select
-	•	Batch actions: remove / set duration / set pipeline preset
-4.3 Per-slide overrides
-Allow per-slide:
-	•	duration
-	•	transition type
-	•	render pipeline preset
-	•	tone (optional: “use global” checkbox)
-Acceptance: global defaults remain, but power users can tune a single slide.
-4.4 “Preview this slide” button
-In edit mode:
-	•	click slide → it displays immediately without changing autoplay timers.
-
-5) Make settings feel premium and safe
-5.1 Settings panel: sections + sticky actions
-Your panel is good—tighten UX:
-	•	Collapse groups:
-	◦	Playback
-	◦	Look (Tone + Pipeline)
-	◦	Slides
-	◦	System
-	•	Sticky bottom bar:
-	◦	Save
-	◦	Reset
-	◦	Enter Kiosk
-5.2 Safe numeric inputs
-For interval/transition:
-	•	step buttons (+/-)
-	•	input clamps
-	•	tooltips: “Transition must be < interval”
-Acceptance: no invalid combos.
-5.3 “Reset only this section”
-Add:
-	•	Reset Playback
-	•	Reset Look
-	•	Reset Slides
-
-6) Feedback + errors that users actually understand
-6.1 Toast notifications for every meaningful action
-	•	“Added 3 media items”
-	•	“Saved project”
-	•	“Couldn’t play video: click to enable playback”
-	•	“Unsupported format”
-6.2 Media health warnings
-In playlist, show:
-	•	⚠️ missing/failed media
-	•	“Video blocked” state with fix hint
-	•	“GIF using heavy mode” hint if perf issues
-6.3 Confirmation dialogs (only where needed)
-	•	Removing slides
-	•	Reset all
-	•	Exiting edit with unsaved changes
-
-7) Touch-first + kiosk ergonomics
-7.1 Hit targets and spacing
-	•	Buttons minimum 44px height
-	•	Increase padding in playlist rows and controls
-	•	Bigger drag handles
-7.2 Cursor + idle behavior
-	•	In kiosk: hide cursor after 2s idle
-	•	In edit: keep cursor
-7.3 Prevent accidental page gestures
-	•	Disable page scroll during kiosk
-	•	Prevent double-tap zoom on touch screens (optional)
-
-8) Visual polish: hierarchy + readability
-8.1 Stronger hierarchy in right panel
-	•	Make “Dotscreen Controls” header more distinct
-	•	Use consistent label alignment
-	•	Group sliders into a grid (label / slider / value)
-8.2 Consistent microcopy
-	•	Use one naming system:
-	◦	“Slide interval”
-	◦	“Transition time”
-	◦	“Look preset”
-	◦	“Pipeline”
-	•	Avoid “Render pipeline” if users don’t know it; rename to Look / Effect
-8.3 “Quick preset chips”
-Add top-level chips:
-	•	Clean
-	•	Neon
-	•	Print
-	•	Trails
-	•	Glitch (short)
-
-9) Projects that are truly portable
-9.1 “Export Project” / “Import Project”
-	•	Export JSON file (and optionally a ZIP later)
-	•	Import JSON file
-	•	Keep current “Save Project / Load Project” but also provide file-based
-9.2 Autosave + versioning
-	•	Autosave to localStorage every change
-	•	Keep last 5 revisions (“Restore previous”)
-Acceptance: users don’t lose work.
-
-10) Ship-grade performance and reliability UX
-10.1 Performance mode toggle
-Add a toggle:
-	•	Performance Mode (recommended for 4K kiosks)
-	◦	caps DPR
-	◦	disables heaviest effects
-	◦	limits GIF update rate
-10.2 FPS/Status debug (hidden)
-	•	?debug=1 shows:
-	◦	fps
-	◦	current slide id
-	◦	memory usage (if available)
-	◦	renderer dpr
-10.3 Watchdog safety
-If rendering fails or media fails:
-	•	fall back to a safe “Clean mode”
-	•	show a discreet “Recovered from error” toast
-
-11) Keyboard shortcuts (make them discoverable)
-You already have H/F/S. Add:
-	•	Space: Play/Pause (optional)
-	•	→ / ←: Next/Prev slide
-	•	K: Enter/Exit kiosk
-	•	?: show shortcuts overlay
-	•	Esc: Exit kiosk / close modal
-Add a Shortcuts section in settings.
-
-12) Accessibility + clarity (still matters for kiosks)
-	•	Ensure text contrast meets basic readability
-	•	Focus trap for modal dialogs
-	•	Labels for sliders (aria-label)
-	•	Large text mode (optional toggle)
-
-“Ready to ship” acceptance checklist
-Use this to decide if you’re done:
-	•	 New user can add media and start playback in under 30 seconds
-	•	 Kiosk mode works: enter button, ESC exit, cursor hides, UI locked
-	•	 Playlist reorder is easy and obvious (drag handle + thumbnails)
-	•	 Every action has feedback (toast) and errors explain how to fix
-	•	 Videos/GIFs reliably animate; autoplay blocked cases are handled
-	•	 Settings are grouped, searchable or well structured, with safe defaults
-	•	 Export/Import works (portable project) and autosave prevents loss
-	•	 Performance mode prevents stutters on 4K screens
-	•	Kiosk button + hold-to-unlock
-	•	Playlist panel with thumbnails + drag reorder
-	•	Toast system + shortcut overlay
-
+This makes your typography dynamic and engaging. If you meant something else (e.g., a specific library or 2D CSS-based), clarify!
 
