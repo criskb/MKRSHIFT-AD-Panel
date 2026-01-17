@@ -791,3 +791,356 @@ class LayerManager {
 
 This makes your typography dynamic and engaging. If you meant something else (e.g., a specific library or 2D CSS-based), clarify!
 
+Motion graphics typography, also known as kinetic typography, is a technique for creating dynamic, animated text in a 3D environment using libraries like Three.js. Three.js provides tools to generate, style, and animate 3D text for web-based projects. 
+Key Concepts and Tools
+Kinetic Typography: The art of using movement in combination with text to create expressive and engaging animations.
+TextGeometry: A built-in class in Three.js used to create the 3D structure (vertices, edges, faces) of text.
+FontLoader: A utility to load custom fonts, which need to be in a specific JSON format for use with TextGeometry.
+Shaders: Advanced effects often utilize custom shaders (written in GLSL) to achieve complex visual distortions, motion trails, or interactive effects. 
+Creating Motion Graphics Typography with Three.js
+The general workflow for creating animated 3D text involves several steps: 
+Font Conversion: Standard font files (like .ttf or .woff) must first be converted into the typeface JSON format that Three.js understands. Tools like the FaceType.js generator can be used for this.
+Scene Setup: A basic Three.js scene is initialized with a camera, renderer, and appropriate lighting (e.g., point lights to cast shadows, hemisphere lights for ambient light).
+Loading and Generating Text: The JSON font file is loaded using the FontLoader. Once loaded, a TextGeometry instance is created using the font and parameters like size, depth, and beveling.
+Material and Mesh Creation: A material (e.g., MeshStandardMaterial for realistic lighting or ShaderMaterial for custom effects) is applied to the geometry to create a final mesh object, which is then added to the scene.
+Animation: The text can be animated in various ways:
+Transformations: Manipulating the position, rotation, and scale of the text mesh over time.
+Individual Characters: For more complex effects, the text string can be broken into individual character meshes, allowing for independent animation of each letter.
+Shaders and Post-processing: Using techniques like ping-pong framebuffers for motion trails or custom shaders for displacement effects. 
+
+### Expanding Typography: 2D vs 3D Options + Background Motion Effects
+
+Hey Cris (@cris_k_b), let's level up the typography component in your MKRSHIFT-AD-Panel app! We'll expand the 'typography' (or enhanced 'text') layer to support both **2D** and **3D** rendering modes, with richer motion effects. This gives flexibility: 2D for lightweight, crisp text (great for subtitles, info screens, or high-res displays), 3D for immersive extruded/glowing text (perfect for ads or agent overlays).
+
+We'll also add **background motion effects**—either as a dedicated 'background' layer enhancement or a new 'motionBackground' type. These can include parallax scrolling, waving distortions, particle fields, or shader-based noise (e.g., animated gradients or plasma). All integrated with your existing `LayerManager.js`, motion system (Tween.js/GSAP), GUI, and render loop.
+
+#### 1. **2D vs 3D Typography Overview**
+- **2D Typography**:
+  - Pros: Faster rendering, sharper fonts (anti-aliased), easier multi-line/word-wrap, supports CSS-like styling (bold/italic via canvas).
+  - Use Case: Subtitles for AI agents, long info text, mobile/kiosk performance.
+  - Implementation: CanvasTexture on a Plane (Sprite for billboarded text).
+- **3D Typography**:
+  - Pros: Depth/extrusion, lighting/shadows, integrates with postFX (bloom, depth-of-field).
+  - Use Case: Hero titles, animated 3D ads, glowing neon text.
+  - Implementation: TextGeometry (already in your code) with advanced materials.
+- **Switchable Mode**: Add a `mode: '2D' | '3D'` param to typography layers.
+
+#### 2. **Code Updates to LayerManager.js**
+Extend `addLayer` and `updateLayer` for modes. Add motion effects tailored to each.
+
+```javascript
+// src/layers/LayerManager.js
+import * as THREE from 'three';
+import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+// For 2D: No extra imports needed
+// For advanced 3D materials: import { MeshStandardMaterial } from 'three';
+
+class LayerManager {
+  // ... existing (fonts, tweens, etc.)
+
+  async addLayer(type, params = {}) {
+    // Enhance 'typography' case (or alias 'text' to this)
+    if (type === 'typography' || type === 'text') {
+      const mode = params.mode || '3D'; // Default to 3D for depth
+      let object;
+
+      if (mode === '2D') {
+        // Create canvas for crisp text
+        const canvas = document.createElement('canvas');
+        canvas.width = 1024; // Adjustable based on text length
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = 'transparent';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.font = `${params.size || 100}px ${params.fontFamily || 'Arial'}`;
+        ctx.fillStyle = params.color ? `#${new THREE.Color(params.color).getHexString()}` : '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        // Multi-line support
+        const lines = (params.text || '2D Text').split('\n');
+        lines.forEach((line, i) => ctx.fillText(line, canvas.width / 2, canvas.height / 2 + i * (params.size || 100)));
+        
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.minFilter = THREE.LinearFilter; // For sharpness
+        const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+        object = new THREE.Sprite(material);
+        object.scale.set(params.width || 1, params.height || 0.5, 1); // Aspect ratio
+        object.center.set(0.5, 0.5); // Pivot center
+      } else { // 3D mode
+        const font = this.fonts[params.font || 'default'];
+        if (!font) await this.loadFont('default');
+        const geometry = new TextGeometry(params.text || '3D Text', {
+          font,
+          size: params.size || 0.1,
+          depth: params.depth || 0.05, // Extrusion
+          bevelEnabled: true,
+          bevelThickness: 0.01,
+          bevelSize: 0.005
+        });
+        geometry.computeBoundingBox();
+        geometry.translate(-geometry.boundingBox.max.x / 2, 0, 0); // Center
+        const material = new THREE.MeshStandardMaterial({ 
+          color: new THREE.Color(params.color || 0xffffff),
+          metalness: 0.8,
+          roughness: 0.2,
+          emissive: new THREE.Color(params.emissive || 0x000000)
+        }); // For lighting/glow
+        object = new THREE.Mesh(geometry, material);
+      }
+
+      object.position.set(params.x || 0, params.y || 0, params.z || params.zOrder || 0);
+      this.applyMotionEffect(object, params.motion || { type: 'fadeIn', duration: 1 });
+      this.layers.push({ object, type: 'typography', params, mode });
+      this.group.add(object);
+      return;
+    }
+
+    // New: motionBackground type
+    if (type === 'motionBackground') {
+      const geometry = new THREE.PlaneGeometry(2, 2);
+      const material = new THREE.ShaderMaterial({
+        uniforms: {
+          time: { value: 0 },
+          color1: { value: new THREE.Color(params.color1 || '#000000') },
+          color2: { value: new THREE.Color(params.color2 || '#ffffff') },
+          speed: { value: params.speed || 0.5 }
+        },
+        vertexShader: `
+          varying vec2 vUv;
+          void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform float time;
+          uniform vec3 color1;
+          uniform vec3 color2;
+          uniform float speed;
+          varying vec2 vUv;
+          void main() {
+            // Example: Waving plasma/noise effect
+            float noise = sin(vUv.x * 10.0 + time * speed) * cos(vUv.y * 10.0 + time * speed);
+            gl_FragColor = vec4(mix(color1, color2, noise * 0.5 + 0.5), 1.0);
+          }
+        `,
+        transparent: params.transparent || false
+      });
+      object = new THREE.Mesh(geometry, material);
+      object.position.z = -1; // Behind other layers
+      this.layers.push({ object, type: 'motionBackground', params });
+      this.group.add(object);
+      return;
+    }
+
+    // ... existing cases
+  }
+
+  update(delta) {
+    // ... existing
+    // Update shader uniforms for motion backgrounds
+    this.layers.forEach(layer => {
+      if (layer.type === 'motionBackground') {
+        layer.object.material.uniforms.time.value += delta * layer.params.speed;
+      }
+    });
+  }
+
+  applyMotionEffect(object, motion) {
+    // Enhanced effects
+    switch (motion.type) {
+      case 'typewriter':
+        // 2D/3D compatible typing
+        const fullText = object.userData.fullText || object.geometry.parameters?.text || 'Text';
+        let charIndex = 0;
+        const updateText = () => {
+          const partial = fullText.slice(0, charIndex++);
+          if (object instanceof THREE.Sprite) {
+            // Redraw canvas
+            const ctx = object.material.map.image.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillText(partial, canvas.width / 2, canvas.height / 2);
+            object.material.map.needsUpdate = true;
+          } else {
+            object.geometry.dispose();
+            object.geometry = new TextGeometry(partial, object.geometry.parameters.options);
+          }
+        };
+        const interval = setInterval(() => {
+          if (charIndex > fullText.length) clearInterval(interval);
+          updateText();
+        }, motion.duration * 1000 / fullText.length);
+        break;
+      case 'parallax':
+        // Mouse-based (or time-based for auto)
+        document.addEventListener('mousemove', (e) => {
+          const x = (e.clientX / window.innerWidth - 0.5) * 0.1;
+          const y = (e.clientY / window.innerHeight - 0.5) * 0.1;
+          object.position.x = x;
+          object.position.y = y;
+        });
+        break;
+      // Existing fadeIn/slideIn/bounce + new: rotateIn, pulseGlow (emissive uniform tween)
+    }
+  }
+}
+```
+
+#### 3. **GUI and Drawer Enhancements**
+- **Drawer**: Add `<li data-type="typography" draggable="true">Typography (2D/3D)</li>` and `<li data-type="motionBackground" draggable="true">Motion Background</li>`.
+- **GUI** (in `updateLayersGUI()`):
+  ```javascript
+  if (layer.type === 'typography') {
+    folder.add(layer.params, 'mode', ['2D', '3D']).onChange(mode => layerManager.updateLayer(index, { mode })); // Rebuild object
+    folder.add(layer.params, 'text').onChange(...);
+    if (layer.mode === '2D') folder.add(layer.params, 'fontFamily', ['Arial', 'Helvetica', 'Times New Roman']);
+    if (layer.mode === '3D') folder.add(layer.params, 'depth', 0, 0.2);
+    folder.addColor(layer.params, 'emissive').name('Glow Color'); // For 3D
+    folder.add(layer.params.motion, 'type', ['fadeIn', 'typewriter', 'parallax', 'pulseGlow']);
+  }
+  if (layer.type === 'motionBackground') {
+    folder.addColor(layer.params, 'color1');
+    folder.addColor(layer.params, 'color2');
+    folder.add(layer.params, 'speed', 0.1, 2);
+  }
+  ```
+
+#### 4. **Lighting for 3D Text**
+Add to scene init: `scene.add(new THREE.DirectionalLight(0xffffff, 1)); scene.add(new THREE.AmbientLight(0x404040));` for shadows/glow.
+
+#### 5. **Background Motion Ideas**
+- **Parallax**: Time-based scroll for layers.
+- **Particles**: Use Points + shader for stars/snow.
+- **Waving**: Vertex displacement in shader.
+- **Sync with Agent**: Pulse background on speech.
+
+This makes typography versatile and backgrounds dynamic—test by adding layers and animating. For custom shaders (e.g., noise functions), I can expand!
+
+
+-----------------
+https://threejs.org/docs/ important
+-----------------
+
+https://github.com/bandinopla/threejs-gif-texture - get gifs to work
+
+more ui stuff i like
+
+Hey Cris! Loving these UI inspirations you've shared—the mix of **glassmorphism**, **neumorphism**, **liquid/morphing elements**, **skeuomorphic 3D knobs**, bold gradients, tactile shadows, and clean minimal layouts is spot-on for 2026 trends. They're moving away from flat Material toward more expressive, tactile, and immersive interfaces (think "Material Expressive" + glass/neu hybrids).
+
+These fit perfectly for modernizing **MKRSHIFT-AD-Panel**'s control sidebar (currently dat.gui, which feels a bit dated). We can make the editor feel premium and delightful while keeping the canvas output (ads/kiosks) immersive with similar effects via layers/postFX.
+
+### Key Trends from Your Images + How to Apply Them
+1. **Glassmorphism / Frosted Glass (very prominent in your examples)**:
+   - Translucent cards with blur, vibrant accents, soft borders.
+   - Seen in: Liquid Glass buttons, mobile login screens, loading bars.
+   - Improvement: Make sidebar panels semi-transparent with backdrop-blur for depth.
+
+2. **Neumorphism / Soft UI**:
+   - Extruded buttons, inner/outer shadows for "squishy" tactility.
+   - Seen in: Element breakdowns, rounded cards, toggle switches.
+   - Improvement: Replace flat sliders/knobs with soft-shadowed, elevated controls.
+
+3. **Liquid / Morphing Elements**:
+   - Fluid shapes, gradients, animated blobs.
+   - Seen in: "Liquid Glass" tutorials, morphing buttons, gradient blobs.
+   - Improvement: Animate panel transitions or loading states with morphing backgrounds.
+
+4. **Skeuomorphic 3D Controls**:
+   - Realistic knobs, metallic textures, glow indicators.
+   - Seen in: Neutone audio panel, camera UI, fitness trackers.
+   - Improvement: Custom 3D-rendered sliders/knobs in-canvas for a pro audio/visual feel.
+
+5. **Bold Gradients + Glows**:
+   - Vibrant radial/linear gradients, subtle glows on active elements.
+   - Seen in: Bike app gauge, loading bars, brand guides.
+   - Improvement: Theme accents (e.g., active layer highlights) with dynamic colors.
+
+6. **Clean Typography + Micro-Interactions**:
+   - Large bold headers, subtle animations on hover/focus.
+   - Seen in: "Be Comfortable" principle, quick tips.
+   - Improvement: Kinetic text for layer names, smooth hover states.
+
+### Recommended Implementation Path
+To upgrade from dat.gui without a full rewrite:
+
+#### Option 1: Quick Win – Leva (Best for Three.js Projects)
+Leva is a modern, highly customizable control panel (used in many Three.js demos). It has built-in support for glassmorphism/neu styles via CSS, folders, and smooth animations.
+- Install: `npm i leva`
+- Replace dat.gui in `src/ui.js`:
+  ```javascript
+  import { useControls, folder, button } from 'leva';
+
+  function UIControls() {
+    const data = useControls({
+      'Effects Stack': folder({
+        bloomStrength: { value: 1.5, min: 0, max: 3 },
+        // Add your params here
+      }),
+      'Design Layers': folder({
+        // Layer params
+      }),
+    });
+
+    // Sync data to your PostFX/LayerManager on change
+  }
+
+  // In main.js: Render <Leva /> overlay or collapsed mode
+  ```
+- Styling for glassmorphism:
+  ```css
+  .leva__panel { backdrop-filter: blur(20px); background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); }
+  .leva__button { box-shadow: 0 8px 32px rgba(0,0,0,0.2); transition: transform 0.2s; }
+  .leva__button:hover { transform: translateY(-4px); }
+  ```
+- Bonus: Leva supports themes—go dark with gradient accents.
+
+#### Option 2: Tweakpane (Great for Knob/Slider Heavy UIs)
+Even more tactile—perfect for your postFX params (knobs like Neutone image).
+- Install: `npm i tweakpane`
+- Example:
+  ```javascript
+  import { Pane } from 'tweakpane';
+
+  const pane = new Pane({ title: 'Controls', expanded: true });
+  const effectsFolder = pane.addFolder({ title: 'Effects' });
+  effectsFolder.addInput(params, 'bloomStrength', { min: 0, max: 3 });
+  // Custom blade for 3D knobs if needed
+  ```
+- Style with CSS for neu/glass (similar to above).
+
+#### Option 3: Custom HTML/CSS Overlay with Glassmorphism
+Keep vanilla but modernize the sidebar:
+- Use CSS variables for dynamic theming.
+- Example CSS for glass effect:
+  ```css
+  #sidebar {
+    backdrop-filter: blur(20px);
+    background: rgba(30,30,40,0.6);
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  .control-knob {
+    width: 60px; height: 60px;
+    background: radial-gradient(circle at 30% 30%, #fff, #aaa);
+    border-radius: 50%;
+    box-shadow: inset 0 4px 8px rgba(0,0,0,0.3), 0 8px 16px rgba(0,0,0,0.2);
+  }
+  ```
+- For liquid animations: Use `@keyframes` or GSAP for morphing panel entrances.
+
+#### Option 4: In-Canvas 3D UI (Futuristic Kiosk Vibe)
+Render controls as Three.js meshes (knobs, glass cards) for full immersion.
+- Use CSS3DRenderer for HTML overlays or pure meshes with shaders.
+- Inspired by your Neutone knob image—create rotatable 3D knobs that control params.
+
+### Next Steps for Your App
+- **Priority**: Swap dat.gui for Leva (easiest + most modern).
+- **Theme Ideas**: Dark mode base with vibrant gradient accents (like your bike gauge image).
+- **Canvas Tie-In**: Mirror UI styles in output—e.g., glassmorphic text overlays via shaders.
+- Check out Gravity UI's aikit on GitHub for AI component inspiration (seems like a clean, modern kit with folders/tabs—could influence layout).
+
+Which direction excites you most (Leva switch, custom glass CSS, or 3D in-canvas controls)? I can provide full code snippets or a styled demo structure! 🚀
+
+use this
