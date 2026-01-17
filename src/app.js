@@ -4,6 +4,19 @@ import { loadSettings, saveSettings, DEFAULTS } from "./settings.js";
 import { VERT, FRAG } from "./shaders.js";
 import { sampleCanvasToParticles } from "./sampling.js";
 import { makeTextCanvas, makeImageCanvas, makeVideoCanvas } from "./slideCanvas.js";
+import {
+  attachAnimatedImage,
+  attachAnimatedVideo,
+  isGifFile,
+  isSupportedFile,
+  isVideoFile,
+  loadImageFromDataUrl,
+  loadImageFromFile,
+  loadVideoFromDataUrl,
+  loadVideoFromFile,
+  readFileAsDataURL,
+} from "./media.js";
+import { createTimelineManager } from "./timeline.js";
 
 export function initApp(){
   const settings = loadSettings();
@@ -146,7 +159,7 @@ export function initApp(){
     slides.push(slide);
     currentSlideIndex = slides.length - 1;
     setCurrentSlide(currentSlideIndex);
-    renderTimeline();
+    timeline.render();
     markInteraction();
   });
 
@@ -157,7 +170,7 @@ export function initApp(){
     slides.splice(currentSlideIndex,1);
     currentSlideIndex = (currentSlideIndex + slides.length) % slides.length;
     setCurrentSlide(currentSlideIndex);
-    renderTimeline();
+    timeline.render();
     markInteraction();
   });
 
@@ -176,7 +189,7 @@ export function initApp(){
     syncUIFromSettings();
     updateSizeVariance();
     rebuildParticles();
-    renderTimeline();
+    timeline.render();
     nextAuto = nowS() + getSlideDuration(slides[currentSlideIndex]);
     markInteraction();
   });
@@ -547,6 +560,7 @@ export function initApp(){
     settings.oscMode = ui.oscMode.value;
     applyRenderSettings(getEffectiveSettings(currentSlide));
     saveSettings(settings);
+    applyRenderSettings(getEffectiveSettings(currentSlide));
     markInteraction();
   });
   ui.blend.addEventListener("change", ()=>{
@@ -590,324 +604,31 @@ export function initApp(){
     return overrides;
   }
 
-  function attachAnimatedImage(img){
-    if(!mediaPool) return;
-    if(img.dataset?.attached === "true") return;
-    img.dataset.attached = "true";
-    img.style.position = "absolute";
-    img.style.left = "0";
-    img.style.top = "0";
-    img.style.width = "1px";
-    img.style.height = "1px";
-    img.style.opacity = "0";
-    mediaPool.appendChild(img);
-  }
-
-  function attachAnimatedVideo(video){
-    if(!mediaPool) return;
-    if(video.dataset?.attached === "true") return;
-    video.dataset.attached = "true";
-    video.muted = true;
-    video.playsInline = true;
-    video.autoplay = true;
-    mediaPool.appendChild(video);
-    video.play().catch(()=>{});
-  }
-
-  function updateTimelineActive(){
-    if(!ui.timeline) return;
-    const cards = ui.timeline.querySelectorAll(".timeline-card");
-    cards.forEach((card, index) => {
-      card.classList.toggle("active", index === currentSlideIndex);
-    });
-  }
-
   function applySlideOverrides(slide){
     const activeSettings = { ...getEffectiveSettings(slide), stableSample: slide.stableSample };
     applyRenderSettings(activeSettings);
   }
-
-  function createLabeledInput(labelText, inputEl){
-    const row = document.createElement("div");
-    row.className = "row";
-    const label = document.createElement("label");
-    label.textContent = labelText;
-    const ctl = document.createElement("div");
-    ctl.className = "ctl";
-    ctl.appendChild(inputEl);
-    row.append(label, ctl);
-    return row;
-  }
-
-  function renderTimeline(){
-    if(!ui.timeline) return;
-    ui.timeline.innerHTML = "";
-    slides.forEach((slide, index) => {
-      ensureSlideId(slide);
-      const card = document.createElement("div");
-      card.className = "timeline-card";
-      if(index === currentSlideIndex) card.classList.add("active");
-
-      const header = document.createElement("div");
-      header.className = "timeline-header";
-
-      const titleWrap = document.createElement("div");
-      titleWrap.className = "timeline-title";
-      const title = document.createElement("div");
-      title.textContent = slide.type === "text" ? slide.title || "Text slide" : slide.name || "Media";
-      const meta = document.createElement("span");
-      meta.textContent = slide.type.toUpperCase();
-      titleWrap.append(title, meta);
-
-      const actions = document.createElement("div");
-      actions.className = "timeline-actions";
-
-      const btnSelect = document.createElement("button");
-      btnSelect.className = "btn tiny";
-      btnSelect.textContent = "Select";
-      btnSelect.addEventListener("click", () => {
-        setCurrentSlide(index);
-      });
-
-      const btnUp = document.createElement("button");
-      btnUp.className = "btn tiny";
-      btnUp.textContent = "↑";
-      btnUp.disabled = index === 0;
-      btnUp.addEventListener("click", () => {
-        if(index === 0) return;
-        const tmp = slides[index - 1];
-        slides[index - 1] = slides[index];
-        slides[index] = tmp;
-        if(currentSlideIndex === index) currentSlideIndex -= 1;
-        else if(currentSlideIndex === index - 1) currentSlideIndex += 1;
-        renderTimeline();
-        markInteraction();
-      });
-
-      const btnDown = document.createElement("button");
-      btnDown.className = "btn tiny";
-      btnDown.textContent = "↓";
-      btnDown.disabled = index === slides.length - 1;
-      btnDown.addEventListener("click", () => {
-        if(index >= slides.length - 1) return;
-        const tmp = slides[index + 1];
-        slides[index + 1] = slides[index];
-        slides[index] = tmp;
-        if(currentSlideIndex === index) currentSlideIndex += 1;
-        else if(currentSlideIndex === index + 1) currentSlideIndex -= 1;
-        renderTimeline();
-        markInteraction();
-      });
-
-      const btnDelete = document.createElement("button");
-      btnDelete.className = "btn tiny";
-      btnDelete.textContent = "✕";
-      btnDelete.disabled = slides.length <= 1;
-      btnDelete.addEventListener("click", () => {
-        if(slides.length <= 1) return;
-        slides.splice(index, 1);
-        if(currentSlideIndex >= slides.length) currentSlideIndex = slides.length - 1;
-        renderTimeline();
-        setCurrentSlide(currentSlideIndex);
-        markInteraction();
-      });
-
-      actions.append(btnSelect, btnUp, btnDown, btnDelete);
-      header.append(titleWrap, actions);
-
-      const settingsWrap = document.createElement("div");
-      settingsWrap.className = "timeline-settings";
-      const details = document.createElement("details");
-      const summary = document.createElement("summary");
-      summary.textContent = "Slide settings";
-      details.appendChild(summary);
-
-      const useGlobal = document.createElement("input");
-      useGlobal.type = "checkbox";
-      useGlobal.checked = !slide.overrides;
-      const useGlobalRow = createLabeledInput("Use global settings", useGlobal);
-      details.appendChild(useGlobalRow);
-
-      const durationInput = document.createElement("input");
-      durationInput.type = "number";
-      durationInput.min = "2";
-      durationInput.max = "60";
-      durationInput.step = "0.5";
-      durationInput.value = String(slide.duration ?? settings.interval);
-      durationInput.addEventListener("change", () => {
-        slide.duration = getSlideDuration({ duration: durationInput.value });
-        durationInput.value = String(slide.duration);
-        if(index === currentSlideIndex){
-          nextAuto = nowS() + getSlideDuration(slide);
-        }
-        markInteraction();
-      });
-      details.appendChild(createLabeledInput("Duration (sec)", durationInput));
-
-      const transitionInput = document.createElement("input");
-      transitionInput.type = "number";
-      transitionInput.min = "0.6";
-      transitionInput.max = "10";
-      transitionInput.step = "0.1";
-      transitionInput.value = String(slide.transition ?? settings.transition);
-      transitionInput.addEventListener("change", () => {
-        slide.transition = getSlideTransition({ transition: transitionInput.value });
-        transitionInput.value = String(slide.transition);
-        markInteraction();
-      });
-      details.appendChild(createLabeledInput("Transition (sec)", transitionInput));
-
-      const controlFields = [
-        { key: "dotSize", label: "Particle size", type: "range", min: 0.6, max: 50, step: 0.1 },
-        { key: "softness", label: "Sharpness", type: "range", min: 0.02, max: 0.35, step: 0.01 },
-        { key: "threshold", label: "Threshold", type: "range", min: 0.05, max: 0.95, step: 0.01 },
-        { key: "ditherStrength", label: "Dither strength", type: "range", min: 0, max: 1, step: 0.01 },
-        { key: "brightness", label: "Brightness", type: "range", min: -0.5, max: 0.5, step: 0.01 },
-        { key: "contrast", label: "Contrast", type: "range", min: 0.5, max: 2, step: 0.01 },
-        { key: "saturation", label: "Saturation", type: "range", min: 0, max: 2, step: 0.01 },
-        { key: "gamma", label: "Gamma", type: "range", min: 0.5, max: 2.5, step: 0.01 },
-        { key: "swirl", label: "Swirl", type: "range", min: 0, max: 6, step: 0.1 },
-        { key: "jitter", label: "Jitter", type: "range", min: 0, max: 2.5, step: 0.05 },
-        { key: "oscAmplitude", label: "Osc amplitude", type: "range", min: 0, max: 6, step: 0.05 },
-        { key: "oscFrequency", label: "Osc frequency", type: "range", min: 0.5, max: 12, step: 0.1 },
-        { key: "oscSpeed", label: "Osc speed", type: "range", min: 0, max: 6, step: 0.05 },
-      ];
-
-      const selects = [
-        {
-          key: "shape",
-          label: "Shape",
-          options: [
-            { value: "dot", label: "Dot" },
-            { value: "square", label: "Square" },
-            { value: "diamond", label: "Diamond" },
-            { value: "pixel", label: "Pixel" },
-          ],
-        },
-        {
-          key: "animEffect",
-          label: "Animation effect",
-          options: [
-            { value: "all", label: "All" },
-            { value: "swirl", label: "Swirl" },
-            { value: "jitter", label: "Jitter" },
-            { value: "oscillation", label: "Oscillation" },
-            { value: "none", label: "None" },
-          ],
-        },
-        {
-          key: "mode",
-          label: "Sampling mode",
-          options: [
-            { value: "auto", label: "Auto" },
-            { value: "silhouette", label: "Silhouette" },
-            { value: "edges", label: "Edges" },
-            { value: "full", label: "Full image" },
-            { value: "grid", label: "Grid halftone" },
-          ],
-        },
-        {
-          key: "dither",
-          label: "Dither",
-          options: [
-            { value: "none", label: "None" },
-            { value: "bayer2", label: "Bayer 2×2" },
-            { value: "bayer4", label: "Bayer 4×4" },
-            { value: "random", label: "Random" },
-          ],
-        },
-        {
-          key: "blend",
-          label: "Blending",
-          options: [
-            { value: "add", label: "Additive" },
-            { value: "normal", label: "Normal" },
-          ],
-        },
-        {
-          key: "oscMode",
-          label: "Oscillation",
-          options: [
-            { value: "none", label: "None" },
-            { value: "grid", label: "Grid" },
-            { value: "radial", label: "Radial" },
-          ],
-        },
-      ];
-
-      const controlInputs = [];
-      const syncControlValues = () => {
-        const source = slide.overrides ?? settings;
-        controlInputs.forEach(({ input, key }) => {
-          input.value = String(source[key]);
-        });
-      };
-
-      controlFields.forEach((field) => {
-        const input = document.createElement("input");
-        input.type = field.type;
-        input.min = String(field.min);
-        input.max = String(field.max);
-        input.step = String(field.step);
-        input.value = String((slide.overrides ?? settings)[field.key]);
-        input.addEventListener("input", () => {
-          if(!slide.overrides) return;
-          slide.overrides[field.key] = parseFloat(input.value);
-          if(index === currentSlideIndex){
-            applySlideOverrides(slide);
-            refreshSlide(true);
-          }
-          markInteraction();
-        });
-        controlInputs.push({ input, key: field.key });
-        details.appendChild(createLabeledInput(field.label, input));
-      });
-
-      selects.forEach((field) => {
-        const select = document.createElement("select");
-        field.options.forEach((opt) => {
-          const option = document.createElement("option");
-          option.value = opt.value;
-          option.textContent = opt.label;
-          select.appendChild(option);
-        });
-        select.value = (slide.overrides ?? settings)[field.key];
-        select.addEventListener("change", () => {
-          if(!slide.overrides) return;
-          slide.overrides[field.key] = select.value;
-          if(index === currentSlideIndex){
-            applySlideOverrides(slide);
-            refreshSlide(true);
-          }
-          markInteraction();
-        });
-        controlInputs.push({ input: select, key: field.key });
-        details.appendChild(createLabeledInput(field.label, select));
-      });
-
-      const disableControls = (disabled) => {
-        controlInputs.forEach(({ input }) => {
-          input.disabled = disabled;
-        });
-      };
-      disableControls(!slide.overrides);
-
-      useGlobal.addEventListener("change", () => {
-        slide.overrides = useGlobal.checked ? null : createSlideOverrides();
-        syncControlValues();
-        disableControls(useGlobal.checked);
-        if(index === currentSlideIndex){
-          applySlideOverrides(slide);
-          refreshSlide(true);
-        }
-        markInteraction();
-      });
-
-      settingsWrap.appendChild(details);
-      card.append(header, settingsWrap);
-      ui.timeline.appendChild(card);
-    });
-  }
+  const timeline = createTimelineManager({
+    timelineEl: ui.timeline,
+    settings,
+    getSlides: () => slides,
+    setSlides: (next) => { slides = next; },
+    getCurrentIndex: () => currentSlideIndex,
+    setCurrentIndex: (next) => { currentSlideIndex = next; },
+    setCurrentSlide,
+    markInteraction,
+    refreshSlide,
+    applySlideOverrides,
+    getSlideDuration,
+    getSlideTransition,
+    createSlideOverrides,
+    ensureSlideId,
+    updateNextAuto: (slide, index) => {
+      if(index === currentSlideIndex){
+        nextAuto = nowS() + getSlideDuration(slide);
+      }
+    },
+  });
 
   function rebuildParticles(){
     if(points){
@@ -972,7 +693,7 @@ export function initApp(){
 
     currentSlideIndex = clamp(currentSlideIndex, 0, slides.length-1);
     void applySlide(slides[currentSlideIndex]);
-    updateTimelineActive();
+    timeline.updateActive();
     nextAuto = nowS() + getSlideDuration(slides[currentSlideIndex]);
 
     scene.add(points);
@@ -1210,7 +931,7 @@ export function initApp(){
           loadVideoFromFile(f),
           readFileAsDataURL(f),
         ]);
-        attachAnimatedVideo(video);
+        attachAnimatedVideo(video, mediaPool);
         const slide = { type:"video", name: f.name, video, animated: true, dataUrl };
         ensureSlideId(slide);
         slides.push(slide);
@@ -1221,7 +942,7 @@ export function initApp(){
           readFileAsDataURL(f),
         ]);
         if(animated){
-          attachAnimatedImage(img);
+          attachAnimatedImage(img, mediaPool);
         }
         const slide = {
           type:"image",
@@ -1239,99 +960,146 @@ export function initApp(){
     }
     currentSlideIndex = slides.length - 1;
     setCurrentSlide(currentSlideIndex);
-    renderTimeline();
+    timeline.render();
   }
 
-  function loadImageFromFile(file, keepAlive = false){
-    return new Promise((resolve, reject)=>{
-      const url = URL.createObjectURL(file);
-      const img = new Image();
-      img.loading = "eager";
-      img.onload = ()=>{ if(!keepAlive) URL.revokeObjectURL(url); resolve(img); };
-      img.onerror = (e)=>{ if(!keepAlive) URL.revokeObjectURL(url); reject(e); };
-      img.src = url;
-    });
-  }
 
-  function readFileAsDataURL(file){
-    return new Promise((resolve, reject)=>{
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = (err) => reject(err);
-      reader.readAsDataURL(file);
-    });
-  }
-
-  function loadImageFromDataUrl(dataUrl){
-    return new Promise((resolve, reject)=>{
-      const img = new Image();
-      img.loading = "eager";
-      img.onload = () => resolve(img);
-      img.onerror = (e) => reject(e);
-      img.src = dataUrl;
-    });
-  }
-
-  function loadVideoFromDataUrl(dataUrl){
-    return new Promise((resolve, reject)=> {
-      const video = document.createElement("video");
-      video.crossOrigin = "anonymous";
-      video.preload = "auto";
-      video.muted = true;
-      video.playsInline = true;
-      video.loop = true;
-      video.autoplay = true;
-      const onError = (e) => reject(e);
-      const onSeeked = () => resolve(video);
-      const onLoaded = () => {
-        video.currentTime = 0;
-        video.addEventListener("seeked", onSeeked, { once: true });
+  async function buildProjectPayload(){
+    const slidePayloads = [];
+    for(const slide of slides){
+      const base = {
+        id: slide.id,
+        type: slide.type,
+        name: slide.name,
+        title: slide.title,
+        sub: slide.sub,
+        duration: slide.duration,
+        transition: slide.transition,
+        overrides: slide.overrides ?? null,
+        lockColor: slide.lockColor ?? null,
+        stableSample: slide.stableSample ?? null,
       };
-      video.addEventListener("loadedmetadata", onLoaded, { once: true });
-      video.addEventListener("error", onError, { once: true });
-      video.src = dataUrl;
-    });
-  }
-
-  function loadVideoFromFile(file){
-    return new Promise((resolve, reject)=> {
-      const url = URL.createObjectURL(file);
-      const video = document.createElement("video");
-      video.crossOrigin = "anonymous";
-      video.preload = "auto";
-      video.muted = true;
-      video.playsInline = true;
-      video.loop = true;
-      video.autoplay = true;
-      const onError = (e) => reject(e);
-      const onSeeked = () => resolve(video);
-      const onLoaded = () => {
-        video.currentTime = 0;
-        URL.revokeObjectURL(url);
-        video.addEventListener("seeked", onSeeked, { once: true });
-      };
-      video.addEventListener("loadedmetadata", onLoaded, { once: true });
-      video.addEventListener("error", onError, { once: true });
-      video.src = url;
-    });
-  }
-
-  function isVideoFile(file){
-    return Boolean(file?.type && file.type.startsWith("video/"));
-  }
-
-  function isGifFile(file){
-    const name = (file?.name || "").toLowerCase();
-    return file?.type === "image/gif" || name.endsWith(".gif");
-  }
-
-  function isSupportedFile(file){
-    if(!file) return false;
-    if(file.type && (file.type.startsWith("image/") || file.type.startsWith("video/"))){
-      return true;
+      if(slide.type !== "text"){
+        let dataUrl = slide.dataUrl;
+        if(!dataUrl && slide.type === "image" && slide.img?.src?.startsWith("data:")){
+          dataUrl = slide.img.src;
+        }
+        if(!dataUrl && slide.type === "video" && slide.video?.src?.startsWith("data:")){
+          dataUrl = slide.video.src;
+        }
+        base.dataUrl = dataUrl ?? null;
+      }
+      slidePayloads.push(base);
     }
-    const name = (file.name || "").toLowerCase();
-    return name.endsWith(".gif") || name.endsWith(".mp4") || name.endsWith(".webm");
+    return {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      settings: { ...settings },
+      slides: slidePayloads,
+    };
+  }
+
+  async function saveProject(){
+    try{
+      const payload = await buildProjectPayload();
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `dotscreen-project-${Date.now()}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast("Project saved");
+    } catch(err){
+      console.error(err);
+      toast("Failed to save project");
+    }
+  }
+
+  async function loadProjectFromFile(file){
+    try{
+      const raw = await file.text();
+      const data = JSON.parse(raw);
+      if(data?.settings){
+        Object.assign(settings, DEFAULTS, data.settings);
+        saveSettings(settings);
+        syncUIFromSettings();
+      }
+      const loadedSlides = [];
+      if(Array.isArray(data?.slides)){
+        for(const slideData of data.slides){
+          if(slideData?.type === "text"){
+            const slide = {
+              type: "text",
+              title: slideData.title || "Text slide",
+              sub: slideData.sub || "",
+              duration: slideData.duration,
+              transition: slideData.transition,
+              overrides: slideData.overrides ?? null,
+              lockColor: slideData.lockColor ?? null,
+            };
+            ensureSlideId(slide);
+            loadedSlides.push(slide);
+            continue;
+          }
+          if(slideData?.dataUrl){
+            if(slideData.type === "image"){
+              const img = await loadImageFromDataUrl(slideData.dataUrl);
+              const animated = slideData.dataUrl.startsWith("data:image/gif");
+              if(animated){
+                attachAnimatedImage(img, mediaPool);
+              }
+              const slide = {
+                type: "image",
+                name: slideData.name,
+                img,
+                animated,
+                dataUrl: slideData.dataUrl,
+                duration: slideData.duration,
+                transition: slideData.transition,
+              overrides: slideData.overrides ?? null,
+              lockColor: slideData.lockColor ?? animated,
+              hasColorSampled: false,
+              stableSample: slideData.stableSample ?? animated,
+            };
+              ensureSlideId(slide);
+              loadedSlides.push(slide);
+            } else if(slideData.type === "video"){
+              const video = await loadVideoFromDataUrl(slideData.dataUrl);
+              attachAnimatedVideo(video, mediaPool);
+              const slide = {
+                type: "video",
+                name: slideData.name,
+                video,
+                animated: true,
+                dataUrl: slideData.dataUrl,
+                duration: slideData.duration,
+                transition: slideData.transition,
+                overrides: slideData.overrides ?? null,
+                lockColor: slideData.lockColor ?? null,
+              };
+              ensureSlideId(slide);
+              loadedSlides.push(slide);
+            }
+          }
+        }
+      }
+
+      if(!loadedSlides.length){
+        toast("No slides found in project");
+        return;
+      }
+
+      slides = loadedSlides;
+      currentSlideIndex = 0;
+      rebuildParticles();
+      timeline.render();
+      nextAuto = nowS() + getSlideDuration(slides[currentSlideIndex]);
+      toast("Project loaded");
+    } catch(err){
+      console.error(err);
+      toast("Failed to load project");
+    }
   }
 
   async function buildProjectPayload(){
@@ -1485,7 +1253,7 @@ export function initApp(){
   function setCurrentSlide(index, instant = false){
     if(!slides.length) return;
     currentSlideIndex = clamp(index, 0, slides.length - 1);
-    updateTimelineActive();
+    timeline.updateActive();
     const slide = slides[currentSlideIndex];
     nextAuto = nowS() + getSlideDuration(slide);
     if(instant){
@@ -1498,7 +1266,7 @@ export function initApp(){
   rebuildParticles();
   updateCamera();
   applyRenderSettings(getEffectiveSettings(slides[currentSlideIndex]));
-  renderTimeline();
+  timeline.render();
 
   window.addEventListener("resize", ()=>{ updateCamera(); });
 
