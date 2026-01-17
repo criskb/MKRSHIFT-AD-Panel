@@ -4,10 +4,12 @@ export const DEFAULTS = {
   transition: 2.2,
   maxParticles: 18000,
   dotSize: 2.2,
+  sizeVariance: 0.45,
+  shape: "dot",
   softness: 0.13,
   threshold: 0.62,
   swirl: 2.2,
-  jitter: 0.55,
+  jitter: 0,
   mode: "auto",
   blend: "add",
   dither: "none",
@@ -23,6 +25,7 @@ export const DEFAULTS = {
   oscAmplitude: 0,
   oscFrequency: 3,
   oscSpeed: 1.2,
+  animEffect: "all",
 };
 
 export function loadSettings(){
