@@ -554,7 +554,7 @@ export function initApp(){
   }
 
   function applySlideOverrides(slide){
-    const activeSettings = getEffectiveSettings(slide);
+    const activeSettings = { ...getEffectiveSettings(slide), stableSample: slide.stableSample };
     applyRenderSettings(activeSettings);
   }
 
@@ -1037,7 +1037,7 @@ export function initApp(){
   async function applySlide(slide){
     const t0 = nowS();
     let canvas = null;
-    const activeSettings = getEffectiveSettings(slide);
+    const activeSettings = { ...getEffectiveSettings(slide), stableSample: slide.stableSample };
     applyRenderSettings(activeSettings);
 
     if(slide.type === "text"){
@@ -1080,7 +1080,7 @@ export function initApp(){
       return;
     }
     let canvas = null;
-    const activeSettings = getEffectiveSettings(slide);
+    const activeSettings = { ...getEffectiveSettings(slide), stableSample: slide.stableSample };
     applyRenderSettings(activeSettings);
     if(slide.type === "text"){
       canvas = makeTextCanvas(slide.title, slide.sub);
@@ -1136,6 +1136,7 @@ export function initApp(){
           dataUrl,
           lockColor: animated,
           hasColorSampled: false,
+          stableSample: animated,
         };
         ensureSlideId(slide);
         slides.push(slide);
@@ -1333,6 +1334,7 @@ export function initApp(){
                 overrides: slideData.overrides ?? null,
                 lockColor: slideData.lockColor ?? animated,
                 hasColorSampled: false,
+                stableSample: animated,
               };
               ensureSlideId(slide);
               loadedSlides.push(slide);

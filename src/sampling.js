@@ -6,6 +6,7 @@ export function sampleCanvasToParticles(canvas, opts){
   const h = canvas.height;
   const img = ctx.getImageData(0,0,w,h).data;
   const aspect = w / h;
+  const stableSample = Boolean(opts.stableSample);
 
   // Auto mode heuristic: if lots of transparency, use alpha/silhouette.
   let transparentCount = 0;
@@ -124,6 +125,11 @@ export function sampleCanvasToParticles(canvas, opts){
     return [rf, gf, bf];
   }
 
+  function stableHash(x, y){
+    const v = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
+    return (v - Math.floor(v)) * 2 - 1;
+  }
+
   if(mode === "grid"){
     const gridSize = clamp(Math.round(opts.gridSize ?? 16), 2, 200);
     const smoothing = clamp(opts.smoothing ?? 0, 0, 1);
@@ -212,7 +218,7 @@ export function sampleCanvasToParticles(canvas, opts){
 
         const xN = ((cx / w) - 0.5) * 2.0 * aspect;
         const yN = (0.5 - (cy / h)) * 2.0;
-        const zN = (Math.random()*2 - 1) * 0.02;
+        const zN = stableSample ? stableHash(gx, gy) * 0.02 : (Math.random()*2 - 1) * 0.02;
         posList.push(xN, yN, zN);
 
         const [rf, gf, bf] = adjustColor(
@@ -274,8 +280,11 @@ export function sampleCanvasToParticles(canvas, opts){
     }
   }
 
-  const rng = mulberry32((Math.random()*1e9)|0);
-  shuffleInPlace(candidates, rng);
+  let rng = null;
+  if(!stableSample){
+    rng = mulberry32((Math.random()*1e9)|0);
+    shuffleInPlace(candidates, rng);
+  }
 
   const count = Math.min(N, candidates.length);
   const pos = new Float32Array(count * 3);
@@ -287,7 +296,9 @@ export function sampleCanvasToParticles(canvas, opts){
     // Normalize coords: y spans [-1..1], x spans [-aspect..aspect]
     const xN = ((p.x / w) - 0.5) * 2.0 * aspect;
     const yN = (0.5 - (p.y / h)) * 2.0;
-    const zN = (rng()*2 - 1) * 0.08;
+    const zN = stableSample
+      ? stableHash(p.x, p.y) * 0.08
+      : (rng()*2 - 1) * 0.08;
 
     pos[i*3+0] = xN;
     pos[i*3+1] = yN;
