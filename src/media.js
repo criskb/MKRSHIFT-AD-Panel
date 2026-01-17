@@ -18,6 +18,7 @@ export function attachAnimatedVideo(video, mediaPool){
   video.muted = true;
   video.playsInline = true;
   video.autoplay = true;
+  video.loop = true;
   mediaPool.appendChild(video);
   video.play().catch(()=>{});
 }
@@ -52,15 +53,32 @@ export function loadVideoFromDataUrl(dataUrl){
     video.playsInline = true;
     video.loop = true;
     video.autoplay = true;
-    const onError = (e) => reject(e);
-    const onSeeked = () => resolve(video);
-    const onLoaded = () => {
-      video.currentTime = 0;
-      video.addEventListener("seeked", onSeeked, { once: true });
+    let settled = false;
+    const cleanup = () => {
+      video.removeEventListener("loadeddata", onReady);
+      video.removeEventListener("canplay", onReady);
+      video.removeEventListener("error", onError);
     };
-    video.addEventListener("loadedmetadata", onLoaded, { once: true });
+    const onReady = () => {
+      if(settled) return;
+      settled = true;
+      cleanup();
+      resolve(video);
+    };
+    const onError = (e) => {
+      if(settled) return;
+      settled = true;
+      cleanup();
+      reject(e);
+    };
+    video.addEventListener("loadeddata", onReady, { once: true });
+    video.addEventListener("canplay", onReady, { once: true });
     video.addEventListener("error", onError, { once: true });
     video.src = dataUrl;
+    video.load();
+    if(video.readyState >= 2){
+      queueMicrotask(onReady);
+    }
   });
 }
 
@@ -74,16 +92,32 @@ export function loadVideoFromFile(file){
     video.playsInline = true;
     video.loop = true;
     video.autoplay = true;
-    const onError = (e) => reject(e);
-    const onSeeked = () => resolve(video);
-    const onLoaded = () => {
-      video.currentTime = 0;
-      URL.revokeObjectURL(url);
-      video.addEventListener("seeked", onSeeked, { once: true });
+    let settled = false;
+    const cleanup = () => {
+      video.removeEventListener("loadeddata", onReady);
+      video.removeEventListener("canplay", onReady);
+      video.removeEventListener("error", onError);
     };
-    video.addEventListener("loadedmetadata", onLoaded, { once: true });
+    const onReady = () => {
+      if(settled) return;
+      settled = true;
+      cleanup();
+      resolve(video);
+    };
+    const onError = (e) => {
+      if(settled) return;
+      settled = true;
+      cleanup();
+      reject(e);
+    };
+    video.addEventListener("loadeddata", onReady, { once: true });
+    video.addEventListener("canplay", onReady, { once: true });
     video.addEventListener("error", onError, { once: true });
     video.src = url;
+    video.load();
+    if(video.readyState >= 2){
+      queueMicrotask(onReady);
+    }
   });
 }
 
