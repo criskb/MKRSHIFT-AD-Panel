@@ -23,6 +23,16 @@ export function attachAnimatedVideo(video, mediaPool){
   video.play().catch(()=>{});
 }
 
+async function tryPlay(video){
+  try{
+    await video.play();
+  } catch(err){
+    const error = new Error("AUTOPLAY_BLOCKED");
+    error.cause = err;
+    throw error;
+  }
+}
+
 export function loadImageFromFile(file, keepAlive = false){
   return new Promise((resolve, reject)=>{
     const url = URL.createObjectURL(file);
@@ -59,11 +69,16 @@ export function loadVideoFromDataUrl(dataUrl){
       video.removeEventListener("canplay", onReady);
       video.removeEventListener("error", onError);
     };
-    const onReady = () => {
+    const onReady = async () => {
       if(settled) return;
       settled = true;
       cleanup();
-      resolve(video);
+      try{
+        await tryPlay(video);
+        resolve(video);
+      } catch(err){
+        reject(err);
+      }
     };
     const onError = (e) => {
       if(settled) return;
@@ -98,11 +113,16 @@ export function loadVideoFromFile(file){
       video.removeEventListener("canplay", onReady);
       video.removeEventListener("error", onError);
     };
-    const onReady = () => {
+    const onReady = async () => {
       if(settled) return;
       settled = true;
       cleanup();
-      resolve(video);
+      try{
+        await tryPlay(video);
+        resolve(video);
+      } catch(err){
+        reject(err);
+      }
     };
     const onError = (e) => {
       if(settled) return;
