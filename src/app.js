@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { clamp, lerp, ease, nowS, mulberry32 } from "./utils.js";
 import { loadSettings, saveSettings, DEFAULTS } from "./settings.js";
-import { VERT, FRAG } from "./shaders.js";
+import { VERT, FRAG, MEDIA_VERT, MEDIA_FRAG } from "./shaders.js";
 import { sampleCanvasToParticles } from "./sampling.js";
 import { makeTextCanvas, makeImageCanvas, makeVideoCanvas } from "./slideCanvas.js";
 import {
@@ -22,6 +22,7 @@ import {
   syncUIFromSettings,
   updateHalftoneVisibility,
   updateMotionVisibility,
+  updatePipelineVisibility,
 } from "./ui.js";
 
 export function initApp(){
@@ -58,6 +59,7 @@ export function initApp(){
     autoplay: el("autoplay"),
     interval: el("interval"),
     transition: el("transition"),
+    renderMode: el("renderMode"),
     particles: el("particles"),
     dotsize: el("dotsize"),
     dotsizeVal: el("dotsizeVal"),
@@ -113,6 +115,9 @@ export function initApp(){
     btnLoadProject: el("btnLoadProject"),
     projectFile: el("projectFile"),
     timeline: el("timelineDock"),
+    particleControls: el("particleControls"),
+    motionControls: el("motionControls"),
+    halftoneControls: el("halftoneControls"),
   };
 
   const SLIDE_OVERRIDE_KEYS = [
@@ -195,8 +200,10 @@ export function initApp(){
     syncUIFromSettings(ui, settings);
     updateHalftoneVisibility(ui, settings);
     updateMotionVisibility(ui, settings);
+    updatePipelineVisibility(ui, settings);
     updateSizeVariance();
     rebuildParticles();
+    updateRenderMode();
     timeline.render();
     nextAuto = nowS() + getSlideDuration(slides[currentSlideIndex]);
     markInteraction();
@@ -288,6 +295,7 @@ export function initApp(){
     renderer.setSize(w, h);
     material.uniforms.uDpr.value = renderer.getPixelRatio();
     updateScaleUniform();
+    updateMediaScale();
   }
 
   const material = new THREE.ShaderMaterial({
@@ -312,10 +320,34 @@ export function initApp(){
       uOscMode: { value: settings.oscMode === "grid" ? 1 : settings.oscMode === "radial" ? 2 : 0 },
     }
   });
+  const mediaMaterial = new THREE.ShaderMaterial({
+    vertexShader: MEDIA_VERT,
+    fragmentShader: MEDIA_FRAG,
+    transparent: true,
+    depthTest: false,
+    uniforms: {
+      uTexture: { value: null },
+      uBrightness: { value: settings.brightness },
+      uContrast: { value: settings.contrast },
+      uSaturation: { value: settings.saturation },
+      uGamma: { value: settings.gamma },
+    },
+  });
+  const mediaMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mediaMaterial);
+  mediaMesh.frustumCulled = false;
+  mediaMesh.visible = false;
+  scene.add(mediaMesh);
 
   function applyBlend(blendMode = settings.blend){
     material.blending = (blendMode === "add") ? THREE.AdditiveBlending : THREE.NormalBlending;
     material.needsUpdate = true;
+  }
+
+  function applyToneSettings(activeSettings){
+    mediaMaterial.uniforms.uBrightness.value = activeSettings.brightness ?? 0;
+    mediaMaterial.uniforms.uContrast.value = activeSettings.contrast ?? 1;
+    mediaMaterial.uniforms.uSaturation.value = activeSettings.saturation ?? 1;
+    mediaMaterial.uniforms.uGamma.value = activeSettings.gamma ?? 1;
   }
 
   function applyRenderSettings(activeSettings){
@@ -341,9 +373,10 @@ export function initApp(){
       : activeSettings.shape === "diamond"
         ? 2
         : activeSettings.shape === "pixel"
-          ? 3
-          : 0;
+        ? 3
+        : 0;
     applyBlend(activeSettings.blend);
+    applyToneSettings(activeSettings);
   }
 
   function getEffectiveSettings(slide){
@@ -396,6 +429,7 @@ export function initApp(){
   syncUIFromSettings(ui, settings);
   updateHalftoneVisibility(ui, settings);
   updateMotionVisibility(ui, settings);
+  updatePipelineVisibility(ui, settings);
 
   ui.gridSize.addEventListener("input", ()=>{
     settings.gridSize = clamp(parseInt(ui.gridSize.value || "16", 10), 2, 200);
@@ -438,6 +472,13 @@ export function initApp(){
     if(!transitioning){
       morphDur = getSlideTransition(currentSlide);
     }
+    markInteraction();
+  });
+  ui.renderMode.addEventListener("change", ()=>{
+    settings.renderMode = ui.renderMode.value;
+    saveSettings(settings);
+    updatePipelineVisibility(ui, settings);
+    updateRenderMode();
     markInteraction();
   });
   ui.particles.addEventListener("change", ()=>{
@@ -504,6 +545,19 @@ export function initApp(){
 
   let geometry = null;
   let points = null;
+  function updateRenderMode(){
+    const mediaMode = settings.renderMode === "media";
+    if(points){
+      points.visible = !mediaMode;
+    }
+    mediaMesh.visible = mediaMode;
+    if(!currentSlide) return;
+    if(mediaMode){
+      applySlideMedia(currentSlide);
+    } else {
+      void applySlide(currentSlide);
+    }
+  }
 
   let morphStart = 0;
   let morphDur = settings.transition;
@@ -764,6 +818,75 @@ export function initApp(){
     material.uniforms.uScale.value = scale;
   }
 
+  let mediaTexture = null;
+  function disposeMediaTexture(){
+    if(mediaTexture?.dispose){
+      mediaTexture.dispose();
+    }
+    mediaTexture = null;
+  }
+
+  function setMediaTexture(texture){
+    mediaTexture = texture;
+    mediaMaterial.uniforms.uTexture.value = texture;
+  }
+
+  function updateMediaScale(){
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const fit = 0.9;
+    const viewAspect = w / h;
+    const imgAspect = currentImgAspect || 1;
+    let targetW = w * fit;
+    let targetH = h * fit;
+    if(viewAspect > imgAspect){
+      targetH = h * fit;
+      targetW = targetH * imgAspect;
+    } else {
+      targetW = w * fit;
+      targetH = targetW / imgAspect;
+    }
+    mediaMesh.scale.set(targetW, targetH, 1);
+  }
+
+  function getSlideAspect(slide){
+    if(slide?.type === "video"){
+      const w = slide.video?.videoWidth || 1;
+      const h = slide.video?.videoHeight || 1;
+      return w / h;
+    }
+    if(slide?.type === "image"){
+      const w = slide.img?.width || 1;
+      const h = slide.img?.height || 1;
+      return w / h;
+    }
+    return 1200 / 600;
+  }
+
+  function setMediaSourceForSlide(slide){
+    disposeMediaTexture();
+    if(slide?.type === "video" && slide.video){
+      const texture = new THREE.VideoTexture(slide.video);
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.generateMipmaps = false;
+      setMediaTexture(texture);
+      return;
+    }
+    if(slide?.type === "image" && slide.img){
+      const texture = new THREE.Texture(slide.img);
+      texture.needsUpdate = true;
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      setMediaTexture(texture);
+      return;
+    }
+    const fallbackCanvas = makeTextCanvas(slide?.title ?? "MKRShift", slide?.sub ?? "");
+    const texture = new THREE.CanvasTexture(fallbackCanvas);
+    texture.needsUpdate = true;
+    setMediaTexture(texture);
+  }
+
   function getVideoCanvas(slide){
     slide.videoCanvas = makeVideoCanvas(slide.video, slide.videoCanvas);
     return slide.videoCanvas;
@@ -782,7 +905,20 @@ export function initApp(){
     }
   }
 
+  function applySlideMedia(slide){
+    const activeSettings = { ...getEffectiveSettings(slide), stableSample: slide.stableSample };
+    applyToneSettings(activeSettings);
+    setMediaSourceForSlide(slide);
+    currentSlide = slide;
+    currentImgAspect = getSlideAspect(slide);
+    updateMediaScale();
+  }
+
   async function applySlide(slide){
+    if(settings.renderMode === "media"){
+      applySlideMedia(slide);
+      return;
+    }
     const t0 = nowS();
     let canvas = null;
     const activeSettings = { ...getEffectiveSettings(slide), stableSample: slide.stableSample };
@@ -823,6 +959,10 @@ export function initApp(){
   }
 
   async function applySlideInstant(slide, instant){
+    if(settings.renderMode === "media"){
+      applySlideMedia(slide);
+      return;
+    }
     if(!instant){
       await applySlide(slide);
       return;
@@ -958,6 +1098,8 @@ export function initApp(){
         syncUIFromSettings(ui, settings);
         updateHalftoneVisibility(ui, settings);
         updateMotionVisibility(ui, settings);
+        updatePipelineVisibility(ui, settings);
+        updateRenderMode();
       }
       const loadedSlides = [];
       if(Array.isArray(data?.slides)){
@@ -1062,6 +1204,7 @@ export function initApp(){
   rebuildParticles();
   updateCamera();
   applyRenderSettings(getEffectiveSettings(slides[currentSlideIndex]));
+  updateRenderMode();
   timeline.render();
 
   window.addEventListener("resize", ()=>{ updateCamera(); });
@@ -1078,9 +1221,13 @@ export function initApp(){
       if(currentSlide.type === "video"){
         currentSlide.video.play().catch(()=>{});
       }
-      if(t - lastAnimSample > 1 / ANIM_SAMPLE_FPS){
-        lastAnimSample = t;
-        void applySlideInstant(currentSlide, true);
+      if(settings.renderMode === "particles"){
+        if(t - lastAnimSample > 1 / ANIM_SAMPLE_FPS){
+          lastAnimSample = t;
+          void applySlideInstant(currentSlide, true);
+        }
+      } else if(mediaTexture && !mediaTexture.isVideoTexture){
+        mediaTexture.needsUpdate = true;
       }
     }
 
