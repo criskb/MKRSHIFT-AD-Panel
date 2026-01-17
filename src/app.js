@@ -53,6 +53,44 @@ export function initApp(){
     if(v) markInteraction();
   }
 
+  function markPresetCustom(){
+    if(settings.preset === "Custom") return;
+    settings.preset = "Custom";
+    if(ui.preset) ui.preset.value = "Custom";
+    saveSettings(settings);
+  }
+
+  function applyPreset(presetName){
+    const preset = PRESETS[presetName];
+    if(!preset) return;
+    settings.preset = presetName;
+    if(preset.pipeline) settings.pipeline = preset.pipeline;
+    if(preset.transition?.sec != null) settings.transition = preset.transition.sec;
+    if(preset.transition?.softness != null) settings.transitionSoftness = preset.transition.softness;
+    if(preset.tone){
+      settings.brightness = preset.tone.brightness ?? settings.brightness;
+      settings.contrast = preset.tone.contrast ?? settings.contrast;
+      settings.saturation = preset.tone.saturation ?? settings.saturation;
+      settings.gamma = preset.tone.gamma ?? settings.gamma;
+    }
+    if(preset.effects){
+      settings.bloomStrength = preset.effects.bloomStrength ?? settings.bloomStrength;
+      settings.trailDamp = preset.effects.trailDamp ?? settings.trailDamp;
+      settings.grain = preset.effects.grain ?? settings.grain;
+      settings.vignette = preset.effects.vignette ?? settings.vignette;
+      settings.sharpen = preset.effects.sharpen ?? settings.sharpen;
+      settings.chromSplit = preset.effects.chromSplit ?? settings.chromSplit;
+    }
+    saveSettings(settings);
+    syncUIFromSettings(ui, settings);
+    postFX.settings.bloom.strength = settings.bloomStrength;
+    postFX.settings.afterimage.damp = settings.trailDamp;
+    postFX.setMode(settings.pipeline);
+    transitionMat.uniforms.softness.value = settings.transitionSoftness;
+    transitionMat.uniforms.rgbSplit.value = settings.chromSplit;
+    applyToneSettings(settings);
+  }
+
   btnClose.addEventListener("click", () => setPanelVisible(false));
   btnFullscreen.addEventListener("click", () => toggleFullscreen());
   btnHide.addEventListener("click", () => toggleUI());
@@ -63,6 +101,7 @@ export function initApp(){
     transition: el("transition"),
     renderMode: el("renderMode"),
     pipeline: el("pipeline"),
+    preset: el("preset"),
     particles: el("particles"),
     dotsize: el("dotsize"),
     dotsizeVal: el("dotsizeVal"),
@@ -158,6 +197,30 @@ export function initApp(){
     "oscFrequency",
     "oscSpeed",
   ];
+
+  const PRESETS = {
+    CleanKiosk: {
+      pipeline: "clean",
+      transition: { sec: 1.4, softness: 0.18 },
+      tone: { brightness: 0, contrast: 1, saturation: 1, gamma: 1 },
+      effects: { bloomStrength: 0.4, trailDamp: 0.9, grain: 0.08, vignette: 0.2, sharpen: 0.1, chromSplit: 0.0008 },
+    },
+    MKRShiftNeon: {
+      pipeline: "neon",
+      transition: { sec: 2.2, softness: 0.22 },
+      effects: { bloomStrength: 0.9, trailDamp: 0.9, grain: 0.18, vignette: 0.35, sharpen: 0.2, chromSplit: 0.0018 },
+    },
+    PrintPoster: {
+      pipeline: "halftone",
+      transition: { sec: 1.6, softness: 0.15 },
+      effects: { bloomStrength: 0.2, trailDamp: 0.88, grain: 0.12, vignette: 0.25, sharpen: 0.15, chromSplit: 0.001 },
+    },
+    EnergyTrails: {
+      pipeline: "afterimage",
+      transition: { sec: 1.8, softness: 0.2 },
+      effects: { bloomStrength: 0.6, trailDamp: 0.92, grain: 0.1, vignette: 0.25, sharpen: 0.12, chromSplit: 0.0012 },
+    },
+  };
 
   const ANIM_SAMPLE_FPS = 12;
   let lastAnimSample = 0;
@@ -291,6 +354,30 @@ export function initApp(){
     } catch(err){
       console.warn("Fullscreen failed", err);
     }
+  }
+
+  function showTapToStartOverlay(onStart){
+    return new Promise((resolve) => {
+      const overlay = document.createElement("div");
+      overlay.style.cssText = `
+        position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+        background:rgba(0,0,0,0.65); z-index:999999; color:white; font:600 18px/1.2 system-ui;
+        cursor:pointer;
+      `;
+      overlay.textContent = "Click to start playback";
+      overlay.addEventListener("click", async () => {
+        overlay.remove();
+        try{
+          const result = await onStart();
+          resolve(result);
+        } catch(err){
+          console.error(err);
+          toast("Could not start playback");
+          resolve(null);
+        }
+      }, { once: true });
+      document.body.appendChild(overlay);
+    });
   }
 
   const params = new URLSearchParams(location.search);
@@ -480,26 +567,30 @@ export function initApp(){
     markInteraction();
   });
   bindRange(ui.ditherStrength, ui.ditherStrengthVal, settings, "ditherStrength", saveSettings, ()=>{ refreshSlide(true); }, markInteraction);
-  bindRange(ui.brightness, ui.brightnessVal, settings, "brightness", saveSettings, ()=>{ refreshSlide(true); }, markInteraction);
-  bindRange(ui.contrast, ui.contrastVal, settings, "contrast", saveSettings, ()=>{ refreshSlide(true); }, markInteraction);
-  bindRange(ui.saturation, ui.saturationVal, settings, "saturation", saveSettings, ()=>{ refreshSlide(true); }, markInteraction);
-  bindRange(ui.gamma, ui.gammaVal, settings, "gamma", saveSettings, ()=>{ refreshSlide(true); }, markInteraction);
+  bindRange(ui.brightness, ui.brightnessVal, settings, "brightness", saveSettings, ()=>{ markPresetCustom(); refreshSlide(true); }, markInteraction);
+  bindRange(ui.contrast, ui.contrastVal, settings, "contrast", saveSettings, ()=>{ markPresetCustom(); refreshSlide(true); }, markInteraction);
+  bindRange(ui.saturation, ui.saturationVal, settings, "saturation", saveSettings, ()=>{ markPresetCustom(); refreshSlide(true); }, markInteraction);
+  bindRange(ui.gamma, ui.gammaVal, settings, "gamma", saveSettings, ()=>{ markPresetCustom(); refreshSlide(true); }, markInteraction);
   bindRange(ui.bloomStrength, ui.bloomStrengthVal, settings, "bloomStrength", saveSettings, ()=> {
+    markPresetCustom();
     postFX.settings.bloom.strength = settings.bloomStrength;
     postFX.rebuildChain();
   }, markInteraction);
   bindRange(ui.trailDamp, ui.trailDampVal, settings, "trailDamp", saveSettings, ()=> {
+    markPresetCustom();
     postFX.settings.afterimage.damp = settings.trailDamp;
     postFX.rebuildChain();
   }, markInteraction);
-  bindRange(ui.vignette, ui.vignetteVal, settings, "vignette", saveSettings, ()=>{ refreshSlide(true); }, markInteraction);
-  bindRange(ui.grain, ui.grainVal, settings, "grain", saveSettings, ()=>{ refreshSlide(true); }, markInteraction);
-  bindRange(ui.sharpen, ui.sharpenVal, settings, "sharpen", saveSettings, ()=>{ refreshSlide(true); }, markInteraction);
+  bindRange(ui.vignette, ui.vignetteVal, settings, "vignette", saveSettings, ()=>{ markPresetCustom(); refreshSlide(true); }, markInteraction);
+  bindRange(ui.grain, ui.grainVal, settings, "grain", saveSettings, ()=>{ markPresetCustom(); refreshSlide(true); }, markInteraction);
+  bindRange(ui.sharpen, ui.sharpenVal, settings, "sharpen", saveSettings, ()=>{ markPresetCustom(); refreshSlide(true); }, markInteraction);
   bindRange(ui.chromSplit, ui.chromSplitVal, settings, "chromSplit", saveSettings, ()=>{ 
+    markPresetCustom();
     transitionMat.uniforms.rgbSplit.value = settings.chromSplit;
     refreshSlide(true);
   }, markInteraction);
   bindRange(ui.transitionSoftness, ui.transitionSoftnessVal, settings, "transitionSoftness", saveSettings, ()=> {
+    markPresetCustom();
     transitionMat.uniforms.softness.value = settings.transitionSoftness;
   }, markInteraction);
   bindRange(ui.oscAmplitude, ui.oscAmplitudeVal, settings, "oscAmplitude", saveSettings, ()=> applyRenderSettings(getEffectiveSettings(currentSlide)), markInteraction);
@@ -566,6 +657,18 @@ export function initApp(){
     saveSettings(settings);
     postFX.setMode(settings.pipeline);
     postFX.enabled = !document.hidden && postFX.mode !== "none";
+    markPresetCustom();
+    markInteraction();
+  });
+  ui.preset.addEventListener("change", ()=>{
+    const presetName = ui.preset.value;
+    if(presetName === "Custom"){
+      settings.preset = "Custom";
+      saveSettings(settings);
+      markInteraction();
+      return;
+    }
+    applyPreset(presetName);
     markInteraction();
   });
   ui.particles.addEventListener("change", ()=>{
@@ -1125,13 +1228,25 @@ export function initApp(){
     }
   }
 
+  async function loadVideoWithGate(loadFn){
+    try{
+      return await loadFn();
+    } catch(err){
+      if(String(err?.message || err).includes("AUTOPLAY_BLOCKED")){
+        return await showTapToStartOverlay(loadFn);
+      }
+      throw err;
+    }
+  }
+
   async function addFilesAsSlides(files){
     for(const f of files){
       if(isVideoFile(f)){
         const [video, dataUrl] = await Promise.all([
-          loadVideoFromFile(f),
+          loadVideoWithGate(() => loadVideoFromFile(f)),
           readFileAsDataURL(f),
         ]);
+        if(!video) continue;
         attachAnimatedVideo(video, mediaPool);
         const slide = { type:"video", name: f.name, video, animated: true, dataUrl };
         ensureSlideId(slide);
@@ -1270,7 +1385,8 @@ export function initApp(){
               ensureSlideId(slide);
               loadedSlides.push(slide);
             } else if(slideData.type === "video"){
-              const video = await loadVideoFromDataUrl(slideData.dataUrl);
+              const video = await loadVideoWithGate(() => loadVideoFromDataUrl(slideData.dataUrl));
+              if(!video) continue;
               attachAnimatedVideo(video, mediaPool);
               const slide = {
                 type: "video",
@@ -1319,11 +1435,15 @@ export function initApp(){
 
   function setCurrentSlide(index, instant = false){
     if(!slides.length) return;
+    const prevSlide = currentSlide;
     currentSlideIndex = clamp(index, 0, slides.length - 1);
     timeline.updateActive();
     const slide = slides[currentSlideIndex];
     nextAuto = nowS() + getSlideDuration(slide);
     const mediaMode = settings.renderMode === "media";
+    if(prevSlide?.type === "video" && prevSlide.video && prevSlide !== slide){
+      prevSlide.video.pause();
+    }
     if(mediaMode && !instant && currentSlide && currentSlide !== slide){
       startMediaTransition(currentSlide, slide);
       return;

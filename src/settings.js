@@ -28,6 +28,7 @@ export const DEFAULTS = {
   animEffect: "all",
   renderMode: "particles",
   pipeline: "none",
+  preset: "Custom",
   bloomStrength: 0.7,
   trailDamp: 0.9,
   grain: 0.12,

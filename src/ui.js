@@ -49,6 +49,7 @@ export function syncUIFromSettings(ui, settings){
   ui.particles.value = settings.maxParticles;
   ui.renderMode.value = settings.renderMode;
   ui.pipeline.value = settings.pipeline;
+  ui.preset.value = settings.preset;
   ui.mode.value = settings.mode;
   ui.blend.value = settings.blend;
   ui.dither.value = settings.dither;
