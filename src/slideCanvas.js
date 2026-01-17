@@ -42,7 +42,7 @@ export async function makeImageCanvas(img){
   return c;
 }
 
-export function makeVideoCanvas(video){
+export function makeVideoCanvas(video, canvas){
   const maxDim = 320;
   const ar = video.videoWidth / video.videoHeight || 1;
   let w = maxDim, h = maxDim;
@@ -53,8 +53,11 @@ export function makeVideoCanvas(video){
     h = maxDim;
     w = Math.max(1, Math.round(maxDim * ar));
   }
-  const c = document.createElement("canvas");
-  c.width = w; c.height = h;
+  const c = canvas ?? document.createElement("canvas");
+  if(c.width !== w || c.height !== h){
+    c.width = w;
+    c.height = h;
+  }
   const ctx = c.getContext("2d", { willReadFrequently:true });
   ctx.clearRect(0,0,w,h);
   ctx.drawImage(video, 0, 0, w, h);
