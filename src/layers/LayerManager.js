@@ -41,21 +41,35 @@ function applyTransform(object3d, layer){
       layer.scale.z ?? 1,
     );
   }
-  if(layer.visible != null){
-    object3d.visible = Boolean(layer.visible);
-  }
 }
 
 function applyMaterialSettings(material, layer){
   if(!material) return;
-  if(layer.opacity != null){
-    material.transparent = layer.opacity < 1;
-    material.opacity = layer.opacity;
-  }
-  if(layer.color != null && material.color){
-    material.color = normalizeColor(layer.color, material.color);
-  }
-  material.needsUpdate = true;
+  const materials = Array.isArray(material) ? material : [material];
+  const renderOnTop = layer.renderOnTop !== false;
+  materials.forEach((mat) => {
+    if(layer.opacity != null){
+      mat.transparent = layer.opacity < 1;
+      mat.opacity = layer.opacity;
+    }
+    if(layer.color != null && mat.color){
+      mat.color = normalizeColor(layer.color, mat.color);
+    }
+    if(typeof mat.depthTest === "boolean"){
+      mat.depthTest = !renderOnTop;
+      mat.depthWrite = !renderOnTop;
+    }
+    mat.needsUpdate = true;
+  });
+}
+
+function applyMaterialSettingsToObject(object3d, layer){
+  if(!object3d) return;
+  object3d.traverse((child) => {
+    if(child.material){
+      applyMaterialSettings(child.material, layer);
+    }
+  });
 }
 
 function getAutoRotateSpeed(autoRotate){
@@ -92,6 +106,7 @@ export class LayerManager {
     this.group = new THREE.Group();
     this.group.name = groupName;
     this.layers = [];
+    this.activeSlideId = null;
     this.fontLoader = new FontLoader();
     this.textureLoader = new THREE.TextureLoader();
     this.modelLoader = new USDZLoader();
@@ -117,7 +132,9 @@ export class LayerManager {
     this.layers.push(normalizedLayer);
     this.group.add(object3d);
     applyTransform(object3d, normalizedLayer);
+    applyMaterialSettingsToObject(object3d, normalizedLayer);
     this.updateLayerOrder();
+    this.syncLayerVisibility(normalizedLayer);
 
     return normalizedLayer;
   }
@@ -173,7 +190,8 @@ export class LayerManager {
 
     if(layer.object3d){
       applyTransform(layer.object3d, layer);
-      applyMaterialSettings(layer.object3d.material, layer);
+      applyMaterialSettingsToObject(layer.object3d, layer);
+      this.syncLayerVisibility(layer);
     }
 
     return layer;
@@ -220,16 +238,45 @@ export class LayerManager {
     newObject.userData.layerId = layer.id;
     this.group.add(newObject);
     applyTransform(newObject, layer);
-    applyMaterialSettings(newObject.material, layer);
+    applyMaterialSettingsToObject(newObject, layer);
     this.updateLayerOrder();
+    this.syncLayerVisibility(layer);
   }
 
   updateLayerOrder(){
     this.layers.forEach((layer, index) => {
       if(layer.object3d){
-        layer.object3d.renderOrder = index;
+        const baseOrder = layer.renderOnTop === false ? -1000 : 1000;
+        layer.object3d.renderOrder = baseOrder + index;
       }
     });
+  }
+
+  setActiveSlideId(slideId){
+    this.activeSlideId = slideId ?? null;
+    this.layers.forEach((layer) => this.syncLayerVisibility(layer));
+  }
+
+  isLayerInActiveSlide(layer){
+    if(layer.slideId == null || this.activeSlideId == null){
+      return true;
+    }
+    return layer.slideId === this.activeSlideId;
+  }
+
+  shouldLayerBeVisible(layer){
+    const baseVisible = layer.visible !== false;
+    return baseVisible && this.isLayerInActiveSlide(layer);
+  }
+
+  syncLayerVisibility(layer){
+    if(layer?.object3d){
+      layer.object3d.visible = this.shouldLayerBeVisible(layer);
+    }
+  }
+
+  getLayersForSlide(slideId){
+    return this.layers.filter((layer) => layer.slideId === slideId);
   }
 
   update(delta){

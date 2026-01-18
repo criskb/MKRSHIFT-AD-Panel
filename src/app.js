@@ -472,13 +472,13 @@ export function initApp(){
     };
     switch(type){
       case "text":
-        return { type, text: "Edit Me", size: 48, color: "#ffffff", position: snapped };
+        return { type, text: "Edit Me", size: 48, color: "#ffffff", position: snapped, renderOnTop: true };
       case "shape":
-        return { type, width: 180, height: 120, color: "#00ffb3", position: snapped };
+        return { type, width: 180, height: 120, color: "#00ffb3", position: snapped, renderOnTop: true };
       case "image":
-        return { type, width: 240, height: 160, color: "#ffffff", position: snapped };
+        return { type, width: 240, height: 160, color: "#ffffff", position: snapped, renderOnTop: true };
       case "overlay":
-        return { type, width: 260, height: 160, color: "#111111", opacity: 0.4, position: snapped };
+        return { type, width: 260, height: 160, color: "#111111", opacity: 0.4, position: snapped, renderOnTop: true };
       case "background":
         return {
           type,
@@ -486,6 +486,7 @@ export function initApp(){
           height: window.innerHeight,
           color: "#050505",
           position: { x: 0, y: 0, z: -1 },
+          renderOnTop: false,
         };
       default:
         return null;
@@ -495,9 +496,15 @@ export function initApp(){
   async function addLayerFromDrop(type, position){
     const layer = buildLayerTemplate(type, position);
     if(!layer) return;
+    const activeSlide = slides[currentSlideIndex];
+    if(activeSlide?.id){
+      layer.slideId = activeSlide.id;
+    }
     try{
       const created = await layerManager.addLayer(layer);
       selectLayer(created);
+      timeline.render();
+      controls?.refreshLayers?.();
     }catch(err){
       console.error("Failed to add layer", err);
       toast("Could not add layer");
@@ -554,6 +561,7 @@ export function initApp(){
     if(e.key === "h" || e.key === "H") toggleUI();
     if(e.key === "s" || e.key === "S") setPanelVisible(panel.classList.contains("hidden"));
     if(e.key === "f" || e.key === "F") toggleFullscreen();
+    if(e.key === "g" || e.key === "G" || e.key === "w" || e.key === "W") transformControls.setMode("translate");
     if(e.key === "r" || e.key === "R") transformControls.setMode("rotate");
     if(e.key === "e" || e.key === "E") transformControls.setMode("scale");
     if(e.key === "ArrowUp"){
@@ -739,7 +747,7 @@ export function initApp(){
   postFX.setMode(settings.pipeline);
 
   const transformControls = new TransformControls(camera, renderer.domElement);
-  transformControls.setMode("scale");
+  transformControls.setMode("translate");
   transformControls.setTranslationSnap(GRID_SIZE);
   transformControls.setRotationSnap(THREE.MathUtils.degToRad(15));
   transformControls.setScaleSnap(0.1);
@@ -843,6 +851,7 @@ export function initApp(){
       transformControls.detach();
       transformControls.visible = false;
     }
+    timeline?.render?.();
   }
 
   function syncLayerTransform(layer){
@@ -1255,6 +1264,12 @@ export function initApp(){
       }
     },
     scheduleDraftSave,
+    getLayersForSlide: (slide) => layerManager.getLayersForSlide?.(slide.id) ?? [],
+    selectLayer: (layer) => {
+      selectLayer(layer);
+      markInteraction();
+    },
+    getSelectedLayerId: () => selectedLayer?.id ?? null,
   });
 
   controls = createControls({
@@ -1584,6 +1599,8 @@ export function initApp(){
     applyToneSettings(activeSettings);
     setMediaSourceForSlide(slide);
     currentSlide = slide;
+    layerManager.setActiveSlideId(slide?.id);
+    controls?.refreshLayers?.();
     currentImgAspect = getSlideAspect(slide);
     updateMediaScale();
   }
@@ -1656,6 +1673,8 @@ export function initApp(){
       sample = sampleCanvasToParticles(fallbackCanvas, activeSettings);
     }
     currentSlide = slide;
+    layerManager.setActiveSlideId(slide?.id);
+    controls?.refreshLayers?.();
     currentImgAspect = sample.imgAspect;
     updateScaleUniform();
 
@@ -1701,6 +1720,8 @@ export function initApp(){
       sample = sampleCanvasToParticles(fallbackCanvas, activeSettings);
     }
     currentSlide = slide;
+    layerManager.setActiveSlideId(slide?.id);
+    controls?.refreshLayers?.();
     currentImgAspect = sample.imgAspect;
     updateScaleUniform();
     if(slide.lockColor && slide.hasColorSampled){
