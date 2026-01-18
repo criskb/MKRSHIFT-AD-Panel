@@ -86,6 +86,7 @@ export function initApp(){
     postFX.settings.bloom.strength = settings.bloomStrength;
     postFX.settings.afterimage.damp = settings.trailDamp;
     postFX.setMode(settings.pipeline);
+    syncPostFXRenderSource();
     transitionMat.uniforms.softness.value = settings.transitionSoftness;
     transitionMat.uniforms.rgbSplit.value = settings.chromSplit;
     applyToneSettings(settings);
@@ -418,6 +419,21 @@ export function initApp(){
   let transitionFromSlide = null;
   let transitionToSlide = null;
 
+  function setPostFXRenderSource(useTransitionScene) {
+    const renderScene = useTransitionScene ? transitionScene : scene;
+    const renderCamera = useTransitionScene ? transitionCam : camera;
+    postFX.scene = renderScene;
+    postFX.camera = renderCamera;
+    if (postFX.passes.render) {
+      postFX.passes.render.scene = renderScene;
+      postFX.passes.render.camera = renderCamera;
+    }
+  }
+
+  function syncPostFXRenderSource() {
+    setPostFXRenderSource(transitionActive && settings.renderMode === "media");
+  }
+
   function updateCamera(){
     const w = window.innerWidth;
     const h = window.innerHeight;
@@ -575,11 +591,13 @@ export function initApp(){
     markPresetCustom();
     postFX.settings.bloom.strength = settings.bloomStrength;
     postFX.rebuildChain();
+    syncPostFXRenderSource();
   }, markInteraction);
   bindRange(ui.trailDamp, ui.trailDampVal, settings, "trailDamp", saveSettings, ()=> {
     markPresetCustom();
     postFX.settings.afterimage.damp = settings.trailDamp;
     postFX.rebuildChain();
+    syncPostFXRenderSource();
   }, markInteraction);
   bindRange(ui.vignette, ui.vignetteVal, settings, "vignette", saveSettings, ()=>{ markPresetCustom(); refreshSlide(true); }, markInteraction);
   bindRange(ui.grain, ui.grainVal, settings, "grain", saveSettings, ()=>{ markPresetCustom(); refreshSlide(true); }, markInteraction);
@@ -657,6 +675,7 @@ export function initApp(){
     saveSettings(settings);
     postFX.setMode(settings.pipeline);
     postFX.enabled = !document.hidden && postFX.mode !== "none";
+    syncPostFXRenderSource();
     markPresetCustom();
     markInteraction();
   });
@@ -742,6 +761,7 @@ export function initApp(){
     }
     mediaMesh.visible = mediaMode;
     transitionActive = false;
+    syncPostFXRenderSource();
     if(!currentSlide) return;
     if(mediaMode){
       applySlideMedia(currentSlide);
@@ -1139,10 +1159,11 @@ export function initApp(){
     transitionToSlide = toSlide;
     renderSlideToTarget(fromSlide, rtFrom);
     renderSlideToTarget(toSlide, rtTo);
-    transitionMat.uniforms.tFrom.value = rtFrom.texture;
-    transitionMat.uniforms.tTo.value = rtTo.texture;
+    transitionMat.uniforms.tDiffuseA.value = rtFrom.texture;
+    transitionMat.uniforms.tDiffuseB.value = rtTo.texture;
     transitionMat.uniforms.progress.value = 0;
     transitionMat.uniforms.time.value = 0;
+    setPostFXRenderSource(true);
     applySlideMedia(toSlide);
   }
 
@@ -1517,12 +1538,13 @@ export function initApp(){
       const progress = Math.min(1, elapsed / transitionDuration);
       transitionMat.uniforms.progress.value = progress;
       transitionMat.uniforms.time.value = elapsed;
-      renderer.setRenderTarget(null);
-      renderer.render(transitionScene, transitionCam);
+      syncPostFXRenderSource();
+      postFX.render(dt);
       if(progress >= 1){
         transitionActive = false;
         transitionFromSlide = null;
         transitionToSlide = null;
+        syncPostFXRenderSource();
       }
       return;
     }

@@ -2,8 +2,8 @@ import * as THREE from "three";
 
 export const TransitionShader = {
   uniforms: {
-    tFrom: { value: null },
-    tTo: { value: null },
+    tDiffuseA: { value: null },
+    tDiffuseB: { value: null },
     progress: { value: 0 },
     time: { value: 0 },
     softness: { value: 0.2 },
@@ -20,8 +20,8 @@ export const TransitionShader = {
   fragmentShader: `
     precision highp float;
     varying vec2 vUv;
-    uniform sampler2D tFrom;
-    uniform sampler2D tTo;
+    uniform sampler2D tDiffuseA;
+    uniform sampler2D tDiffuseB;
     uniform float progress;
     uniform float time;
     uniform float softness;
@@ -42,10 +42,10 @@ export const TransitionShader = {
       float edge = abs(n - progress);
       float split = rgbSplit * smoothstep(0.2, 0.0, edge);
 
-      vec4 a = texture2D(tFrom, uv);
-      vec4 bR = texture2D(tTo, uv + vec2(split, 0.0));
-      vec4 bG = texture2D(tTo, uv);
-      vec4 bB = texture2D(tTo, uv - vec2(split, 0.0));
+      vec4 a = texture2D(tDiffuseA, uv);
+      vec4 bR = texture2D(tDiffuseB, uv + vec2(split, 0.0));
+      vec4 bG = texture2D(tDiffuseB, uv);
+      vec4 bB = texture2D(tDiffuseB, uv - vec2(split, 0.0));
       vec4 b = vec4(bR.r, bG.g, bB.b, bG.a);
 
       gl_FragColor = mix(a, b, m);
