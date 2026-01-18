@@ -36,6 +36,7 @@ export const DEFAULTS = {
   sharpen: 0.15,
   chromSplit: 0.0015,
   transitionSoftness: 0.2,
+  theme: "dark",
 };
 
 export function loadSettings(){

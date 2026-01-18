@@ -4,8 +4,22 @@
   --ui-tx: rgba(255,255,255,.92);
   --ui-tx-dim: rgba(255,255,255,.72);
   --accent: #00ffb3;
+  --glass-bg: rgba(18,18,18,.55);
+  --glass-bd: rgba(255,255,255,.18);
+  --glass-shadow: 0 18px 60px rgba(0,0,0,.55);
+  --glass-blur: 16px;
 }
 html,body{height:100%;margin:0;background:#000;overflow:hidden;font-family:ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;}
+body[data-theme="light"]{
+  --ui-bg: rgba(255,255,255,.78);
+  --ui-bd: rgba(0,0,0,.12);
+  --ui-tx: rgba(12,12,12,.92);
+  --ui-tx-dim: rgba(16,16,16,.58);
+  --accent: #2563eb;
+  --glass-bg: rgba(255,255,255,.7);
+  --glass-bd: rgba(255,255,255,.6);
+  --glass-shadow: 0 18px 60px rgba(15,23,42,.18);
+}
 #app{position:fixed;inset:0;}
 #halftoneCanvas{display:none;}
 #mediaPool{position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;}
@@ -26,13 +40,13 @@ canvas{display:block;}
 #panel{
   position:fixed;right:12px;top:12px;z-index:30;
   width:min(420px, calc(100vw - 24px));
-  background:var(--ui-bg);
-  border:1px solid var(--ui-bd);
+  background:var(--glass-bg);
+  border:1px solid var(--glass-bd);
   border-radius:14px;
   padding:12px;
   color:var(--ui-tx);
-  backdrop-filter: blur(10px);
-  box-shadow:0 18px 60px rgba(0,0,0,.55);
+  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  box-shadow:var(--glass-shadow);
   max-height:calc(100vh - 24px);
   overflow-y:auto;
   overscroll-behavior:contain;
@@ -61,6 +75,13 @@ input[type="text"], input[type="number"], select{
   padding:8px 10px;
   outline:none;
 }
+body[data-theme="light"] input[type="text"],
+body[data-theme="light"] input[type="number"],
+body[data-theme="light"] select{
+  background:rgba(255,255,255,.78);
+  border-color:rgba(0,0,0,.12);
+  color:var(--ui-tx);
+}
 input[type="file"]{
   color:var(--ui-tx);
   font-size:12px;
@@ -82,6 +103,17 @@ input[type="number"]{width:88px;}
 .btn:active{transform:translateY(1px);}
 .btn.primary{background:rgba(0,255,179,.12);border-color:rgba(0,255,179,.28);}
 .btn.primary:hover{background:rgba(0,255,179,.16);}
+body[data-theme="light"] .btn{
+  background:rgba(0,0,0,.06);
+  border-color:rgba(0,0,0,.12);
+  color:var(--ui-tx);
+}
+body[data-theme="light"] .btn:hover{background:rgba(0,0,0,.1);}
+body[data-theme="light"] .btn.primary{
+  background:rgba(37,99,235,.16);
+  border-color:rgba(37,99,235,.35);
+}
+body[data-theme="light"] .btn.primary:hover{background:rgba(37,99,235,.22);}
 
 .split{display:flex;gap:10px;flex-wrap:wrap;}
 .split .btn{flex:1;min-width:120px;}
@@ -100,6 +132,13 @@ input[type="number"]{width:88px;}
   text-align:center;
 }
 #dropzone.drag{border-color:rgba(0,255,179,.55); color:var(--ui-tx);}
+body[data-theme="light"] #dropzone{
+  border-color:rgba(0,0,0,.2);
+  background:rgba(255,255,255,.5);
+}
+body[data-theme="light"] #dropzone.drag{
+  border-color:rgba(37,99,235,.55);
+}
 
 #watermark{
   position:fixed;right:12px;bottom:10px;z-index:10;
@@ -114,13 +153,13 @@ input[type="number"]{width:88px;}
 #toast{
   position:fixed;left:50%;bottom:18px;transform:translateX(-50%);
   z-index:40;
-  background:rgba(18,18,18,.72);
-  border:1px solid rgba(255,255,255,.14);
+  background:var(--glass-bg);
+  border:1px solid var(--glass-bd);
   border-radius:999px;
   padding:10px 14px;
-  color:rgba(255,255,255,.92);
-  backdrop-filter: blur(10px);
-  box-shadow:0 18px 60px rgba(0,0,0,.55);
+  color:var(--ui-tx);
+  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  box-shadow:var(--glass-shadow);
   font-size:12px;
   letter-spacing:.2px;
   opacity:0;
@@ -144,11 +183,11 @@ input[type="number"]{width:88px;}
   display:flex;
   gap:12px;
   padding:10px;
-  background:var(--ui-bg);
-  border:1px solid var(--ui-bd);
+  background:var(--glass-bg);
+  border:1px solid var(--glass-bd);
   border-radius:14px;
-  backdrop-filter: blur(10px);
-  box-shadow:0 18px 60px rgba(0,0,0,.45);
+  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  box-shadow:var(--glass-shadow);
   overflow-x:auto;
   overscroll-behavior-x:contain;
   z-index:25;
@@ -162,6 +201,10 @@ input[type="number"]{width:88px;}
   background:rgba(0,0,0,.2);
   max-height:220px;
   overflow:hidden;
+}
+body[data-theme="light"] .timeline-card{
+  border-color:rgba(15,23,42,.12);
+  background:rgba(255,255,255,.62);
 }
 .timeline-card.active{
   border-color:rgba(0,255,179,.55);
@@ -204,6 +247,10 @@ input[type="number"]{width:88px;}
   max-height:160px;
   overflow:auto;
 }
+body[data-theme="light"] .timeline-settings details{
+  background:rgba(255,255,255,.7);
+  border-color:rgba(15,23,42,.12);
+}
 .timeline-settings summary{
   cursor:pointer;
   font-size:11px;
@@ -217,5 +264,80 @@ input[type="number"]{width:88px;}
 }
 .timeline-settings details[open] summary::after{transform:rotate(180deg);}
 
+#controlDock{
+  position:fixed;
+  left:12px;
+  top:84px;
+  z-index:32;
+  width:min(320px, calc(100vw - 24px));
+  pointer-events:auto;
+}
+.glass-panel{
+  background:var(--glass-bg);
+  border:1px solid var(--glass-bd);
+  border-radius:16px;
+  box-shadow:var(--glass-shadow);
+  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+}
+
+#controlDock .tp-dotscreen{
+  color:var(--ui-tx);
+}
+#controlDock .tp-dfwv{
+  background:transparent;
+}
+#controlDock .tp-lblv{
+  color:var(--ui-tx-dim);
+}
+#controlDock .tp-btnv{
+  background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.14);
+  color:var(--ui-tx);
+}
+#controlDock .tp-btnv:hover{
+  background:rgba(255,255,255,.16);
+}
+
+@media (max-width: 900px){
+  #panel{
+    left:12px;
+    right:12px;
+    width:auto;
+  }
+  #controlDock{
+    left:12px;
+    right:12px;
+    top:auto;
+    bottom:108px;
+    width:auto;
+  }
+  #timelineDock{
+    flex-direction:column;
+  }
+}
+
+@media (max-width: 600px){
+  #hud{
+    left:8px;
+    top:8px;
+  }
+  #panel{
+    left:8px;
+    right:8px;
+    top:8px;
+    max-height:calc(100vh - 16px);
+  }
+  #controlDock{
+    left:8px;
+    right:8px;
+    bottom:8px;
+  }
+  #timelineDock{
+    left:8px;
+    right:8px;
+    bottom:8px;
+  }
+}
+
 /* Hide UI for kiosk mode */
-body.kiosk #panel, body.kiosk #hud, body.kiosk #timelineDock{display:none;}
+body.kiosk #panel, body.kiosk #hud, body.kiosk #timelineDock, body.kiosk #controlDock{display:none;}
