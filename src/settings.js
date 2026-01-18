@@ -37,6 +37,9 @@ export const DEFAULTS = {
   chromSplit: 0.0015,
   transitionSoftness: 0.2,
   theme: "dark",
+  showGrid: true,
+  showGuides: true,
+  snapToGrid: true,
 };
 
 export function loadSettings(){

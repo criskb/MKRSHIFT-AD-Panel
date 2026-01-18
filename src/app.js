@@ -44,7 +44,12 @@ export function initApp(){
   const btnFullscreen = el("btnFullscreen");
   const btnHide = el("btnHide");
   const btnKiosk = el("btnKiosk");
+  const btnControls = el("btnControls");
+  const btnDrawerToggle = el("btnDrawerToggle");
+  const btnDrawerClose = el("btnDrawerClose");
+  const btnHideUi = el("btnHideUi");
   const dz = el("dropzone");
+  const drawer = el("drawer");
   const drawerList = el("drawerList");
   const canvasDropZone = el("canvasDropZone");
   const btnSaveDraft = el("btnSaveDraft");
@@ -79,9 +84,28 @@ export function initApp(){
     }, 800);
   }
 
+  function updateDockLabels(){
+    if(btnControls){
+      btnControls.textContent = panel.classList.contains("hidden") ? "Show Controls" : "Hide Controls";
+    }
+    if(btnDrawerToggle && drawer){
+      btnDrawerToggle.textContent = drawer.classList.contains("is-hidden") ? "Show Drawer" : "Hide Drawer";
+    }
+    if(btnHideUi){
+      btnHideUi.textContent = document.body.classList.contains("ui-hidden") ? "Show UI" : "Hide UI";
+    }
+  }
+
   function setPanelVisible(v){
     panel.classList.toggle("hidden", !v);
+    updateDockLabels();
     if(v) markInteraction();
+  }
+
+  function setDrawerVisible(v){
+    if(!drawer) return;
+    drawer.classList.toggle("is-hidden", !v);
+    updateDockLabels();
   }
 
   function markPresetCustom(){
@@ -173,6 +197,13 @@ export function initApp(){
   btnClose.addEventListener("click", () => setPanelVisible(false));
   btnFullscreen.addEventListener("click", () => toggleFullscreen());
   btnHide.addEventListener("click", () => toggleUI());
+  btnControls?.addEventListener("click", () => setPanelVisible(panel.classList.contains("hidden")));
+  btnDrawerToggle?.addEventListener("click", () => {
+    if(!drawer) return;
+    setDrawerVisible(drawer.classList.contains("is-hidden"));
+  });
+  btnDrawerClose?.addEventListener("click", () => setDrawerVisible(false));
+  btnHideUi?.addEventListener("click", () => toggleUI());
   btnKiosk?.addEventListener("click", () => {
     void setKioskMode(!isKioskMode());
   });
@@ -232,6 +263,9 @@ export function initApp(){
     renderMode: el("renderMode"),
     pipeline: el("pipeline"),
     preset: el("preset"),
+    gridToggle: el("gridToggle"),
+    guideToggle: el("guideToggle"),
+    snapToggle: el("snapToggle"),
     particles: el("particles"),
     dotsize: el("dotsize"),
     dotsizeVal: el("dotsizeVal"),
@@ -547,48 +581,6 @@ export function initApp(){
     });
   }
 
-  function isEditableTarget(target){
-    if(!target) return false;
-    const tag = target.tagName;
-    return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
-  }
-
-  function nudgeSelectedLayer(dx, dy, fine){
-    if(!selectedLayer?.object3d) return false;
-    const step = fine ? GRID_SIZE / GRID_FINE_DIVISOR : GRID_SIZE;
-    const object = selectedLayer.object3d;
-    object.position.x = snapValue(object.position.x + dx * step, step);
-    object.position.y = snapValue(object.position.y + dy * step, step);
-    syncLayerTransform(selectedLayer);
-    return true;
-  }
-
-  // Hotkeys
-  window.addEventListener("keydown", (e)=>{
-    if(isKioskMode()) return;
-    if(isEditableTarget(document.activeElement)) return;
-    if(e.key === "h" || e.key === "H") toggleUI();
-    if(e.key === "s" || e.key === "S") setPanelVisible(panel.classList.contains("hidden"));
-    if(e.key === "f" || e.key === "F") toggleFullscreen();
-    if(e.key === "g" || e.key === "G" || e.key === "w" || e.key === "W") transformControls.setMode("translate");
-    if(e.key === "r" || e.key === "R") transformControls.setMode("rotate");
-    if(e.key === "e" || e.key === "E") transformControls.setMode("scale");
-    if(e.key === "ArrowUp"){
-      if(nudgeSelectedLayer(0, 1, e.shiftKey)) return;
-    }
-    if(e.key === "ArrowDown"){
-      if(nudgeSelectedLayer(0, -1, e.shiftKey)) return;
-    }
-    if(e.key === "ArrowRight"){
-      if(nudgeSelectedLayer(1, 0, e.shiftKey)) return;
-      nextSlide();
-    }
-    if(e.key === "ArrowLeft"){
-      if(nudgeSelectedLayer(-1, 0, e.shiftKey)) return;
-      prevSlide();
-    }
-  });
-
   // Auto-hide panel after inactivity
   let lastInteraction = performance.now();
   function markInteraction(){
@@ -609,8 +601,14 @@ export function initApp(){
 
   function toggleUI(){
     const hidden = document.body.classList.toggle("ui-hidden");
-    if(!hidden) setPanelVisible(true);
-    else setPanelVisible(false);
+    if(hidden){
+      setPanelVisible(false);
+      setSettingsModalOpen(false);
+    } else {
+      setPanelVisible(true);
+    }
+    updateGuideVisibility();
+    updateDockLabels();
   }
 
   function isKioskMode(){
@@ -660,6 +658,8 @@ export function initApp(){
       document.body.classList.add("kiosk");
       document.body.classList.remove("ui-hidden");
       setPanelVisible(false);
+      setDrawerVisible(false);
+      setSettingsModalOpen(false);
       settings.autoplay = true;
       if(ui.autoplay) ui.autoplay.value = "1";
       saveSettingsAndDraft(settings);
@@ -676,6 +676,7 @@ export function initApp(){
       saveSettingsAndDraft(settings);
       if(!skipFullscreen) await setFullscreen(false);
     }
+    updateGuideVisibility();
     updateKioskButton();
   }
 
@@ -725,8 +726,23 @@ export function initApp(){
   const layerManager = new LayerManager({ scene });
   scene.userData.layerManager = layerManager;
   const GRID_SIZE = 20;
-  const GRID_FINE_DIVISOR = 5;
   let gridHelper = null;
+  const guideGroup = new THREE.Group();
+  const guideMajorMaterial = new THREE.LineBasicMaterial({
+    color: 0x00ffb3,
+    transparent: true,
+    opacity: 0.35,
+    depthTest: false,
+  });
+  const guideMinorMaterial = new THREE.LineBasicMaterial({
+    color: 0x00ffb3,
+    transparent: true,
+    opacity: 0.18,
+    depthTest: false,
+  });
+  guideGroup.position.z = -0.4;
+  guideGroup.renderOrder = -1;
+  scene.add(guideGroup);
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
   let selectedLayer = null;
@@ -749,6 +765,39 @@ export function initApp(){
     gridHelper.position.z = -0.5;
     gridHelper.renderOrder = -1;
     scene.add(gridHelper);
+    updateGuideVisibility();
+  }
+
+  function makeGuideLine(x1, y1, x2, y2, material){
+    const geometry = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(x1, y1, 0),
+      new THREE.Vector3(x2, y2, 0),
+    ]);
+    return new THREE.Line(geometry, material);
+  }
+
+  function rebuildGuides(){
+    guideGroup.clear();
+    const halfW = window.innerWidth / 2;
+    const halfH = window.innerHeight / 2;
+    const thirdW = halfW / 3;
+    const thirdH = halfH / 3;
+    guideGroup.add(
+      makeGuideLine(-halfW, 0, halfW, 0, guideMajorMaterial),
+      makeGuideLine(0, -halfH, 0, halfH, guideMajorMaterial),
+      makeGuideLine(-halfW, thirdH, halfW, thirdH, guideMinorMaterial),
+      makeGuideLine(-halfW, -thirdH, halfW, -thirdH, guideMinorMaterial),
+      makeGuideLine(thirdW, -halfH, thirdW, halfH, guideMinorMaterial),
+      makeGuideLine(-thirdW, -halfH, -thirdW, halfH, guideMinorMaterial),
+    );
+  }
+
+  function updateGuideVisibility(){
+    const suppress = document.body.classList.contains("kiosk") || document.body.classList.contains("ui-hidden");
+    if(gridHelper){
+      gridHelper.visible = settings.showGrid && !suppress;
+    }
+    guideGroup.visible = settings.showGuides && !suppress;
   }
   const postFX = new PostFXManager(renderer, scene, camera);
   postFX.settings.bloom.strength = settings.bloomStrength;
@@ -763,6 +812,10 @@ export function initApp(){
   transformControls.visible = false;
   scene.add(transformControls);
 
+  function updateSnapSettings(){
+    transformControls.setTranslationSnap(settings.snapToGrid ? GRID_SIZE : null);
+  }
+
   transformControls.addEventListener("dragging-changed", (event) => {
     isTransforming = event.value;
   });
@@ -771,6 +824,8 @@ export function initApp(){
     if(!selectedLayer || !transformControls.object) return;
     syncLayerTransform(selectedLayer);
   });
+
+  updateSnapSettings();
 
   document.addEventListener("visibilitychange", () => {
     postFX.enabled = !document.hidden && postFX.mode !== "none";
@@ -825,9 +880,11 @@ export function initApp(){
     updateScaleUniform();
     updateMediaScale();
     updateGridHelper();
+    rebuildGuides();
   }
 
   function snapValue(value, step = GRID_SIZE){
+    if(!settings.snapToGrid) return value;
     return Math.round(value / step) * step;
   }
 
@@ -1098,7 +1155,12 @@ export function initApp(){
   updateHalftoneVisibility(ui, settings);
   updateMotionVisibility(ui, settings);
   updatePipelineVisibility(ui, settings);
+  if(ui.gridToggle) ui.gridToggle.value = settings.showGrid ? "1" : "0";
+  if(ui.guideToggle) ui.guideToggle.value = settings.showGuides ? "1" : "0";
+  if(ui.snapToggle) ui.snapToggle.value = settings.snapToGrid ? "1" : "0";
   updateLayerInspector(null);
+  updateGuideVisibility();
+  updateDockLabels();
 
   ui.layerName?.addEventListener("input", () => {
     if(!selectedLayer) return;
@@ -1155,6 +1217,27 @@ export function initApp(){
     settings.ditherType = ui.ditherType.value;
     saveSettingsAndDraft(settings);
     refreshSlide(true);
+    markInteraction();
+  });
+
+  ui.gridToggle?.addEventListener("change", () => {
+    settings.showGrid = ui.gridToggle.value === "1";
+    saveSettingsAndDraft(settings);
+    updateGuideVisibility();
+    markInteraction();
+  });
+
+  ui.guideToggle?.addEventListener("change", () => {
+    settings.showGuides = ui.guideToggle.value === "1";
+    saveSettingsAndDraft(settings);
+    updateGuideVisibility();
+    markInteraction();
+  });
+
+  ui.snapToggle?.addEventListener("change", () => {
+    settings.snapToGrid = ui.snapToggle.value === "1";
+    saveSettingsAndDraft(settings);
+    updateSnapSettings();
     markInteraction();
   });
 
@@ -1908,6 +1991,11 @@ export function initApp(){
       updateHalftoneVisibility(ui, settings);
       updateMotionVisibility(ui, settings);
       updatePipelineVisibility(ui, settings);
+      if(ui.gridToggle) ui.gridToggle.value = settings.showGrid ? "1" : "0";
+      if(ui.guideToggle) ui.guideToggle.value = settings.showGuides ? "1" : "0";
+      if(ui.snapToggle) ui.snapToggle.value = settings.snapToGrid ? "1" : "0";
+      updateGuideVisibility();
+      updateSnapSettings();
       updateRenderMode();
     }
 
