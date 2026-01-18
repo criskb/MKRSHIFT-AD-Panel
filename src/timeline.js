@@ -17,6 +17,9 @@ export function createTimelineManager({
   ensureSlideId,
   updateNextAuto,
   scheduleDraftSave,
+  getLayersForSlide,
+  selectLayer,
+  getSelectedLayerId,
 }){
   if(!timelineEl){
     return {
@@ -140,6 +143,37 @@ export function createTimelineManager({
 
       const settingsWrap = document.createElement("div");
       settingsWrap.className = "timeline-settings";
+
+      const layerStack = document.createElement("div");
+      layerStack.className = "timeline-layer-stack";
+      const layerTitle = document.createElement("div");
+      layerTitle.className = "timeline-layer-title";
+      layerTitle.textContent = "Layer stack";
+      const layerList = document.createElement("div");
+      layerList.className = "timeline-layer-list";
+      const layers = getLayersForSlide ? getLayersForSlide(slide) : [];
+      const selectedLayerId = getSelectedLayerId ? getSelectedLayerId() : null;
+      if(!layers.length){
+        const empty = document.createElement("div");
+        empty.className = "timeline-layer-empty";
+        empty.textContent = "No layers";
+        layerList.appendChild(empty);
+      } else {
+        layers.forEach((layer, layerIndex) => {
+          const layerButton = document.createElement("button");
+          layerButton.type = "button";
+          layerButton.className = "btn tiny timeline-layer-btn";
+          layerButton.textContent = layer.name || layer.type || `Layer ${layerIndex + 1}`;
+          if(layer.id === selectedLayerId){
+            layerButton.classList.add("active");
+          }
+          layerButton.addEventListener("click", () => {
+            selectLayer?.(layer);
+          });
+          layerList.appendChild(layerButton);
+        });
+      }
+      layerStack.append(layerTitle, layerList);
       const details = document.createElement("details");
       const summary = document.createElement("summary");
       summary.textContent = "Slide settings";
@@ -330,7 +364,7 @@ export function createTimelineManager({
       });
 
       settingsWrap.appendChild(details);
-      card.append(header, settingsWrap);
+      card.append(header, layerStack, settingsWrap);
       timelineEl.appendChild(card);
     });
 
