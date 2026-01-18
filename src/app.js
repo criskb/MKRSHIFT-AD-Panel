@@ -27,9 +27,11 @@ import {
   updateMotionVisibility,
   updatePipelineVisibility,
 } from "./ui.js";
+import { createControls } from "./ui/controls.js";
 
 export function initApp(){
   const settings = loadSettings();
+  document.body.dataset.theme = settings.theme ?? "dark";
 
   const el = (id) => document.getElementById(id);
   const panel = el("panel");
@@ -61,6 +63,9 @@ export function initApp(){
     saveSettings(settings);
   }
 
+  let controls = null;
+  const refreshControls = () => controls?.refresh();
+
   function applyPreset(presetName){
     const preset = PRESETS[presetName];
     if(!preset) return;
@@ -84,6 +89,7 @@ export function initApp(){
     }
     saveSettings(settings);
     syncUIFromSettings(ui, settings);
+    refreshControls();
     postFX.settings.bloom.strength = settings.bloomStrength;
     postFX.settings.afterimage.damp = settings.trailDamp;
     postFX.setMode(settings.pipeline);
@@ -280,6 +286,7 @@ export function initApp(){
     Object.assign(settings, DEFAULTS);
     saveSettings(settings);
     syncUIFromSettings(ui, settings);
+    refreshControls();
     updateHalftoneVisibility(ui, settings);
     updateMotionVisibility(ui, settings);
     updatePipelineVisibility(ui, settings);
@@ -619,6 +626,7 @@ export function initApp(){
   bindRange(ui.oscSpeed, ui.oscSpeedVal, settings, "oscSpeed", saveSettings, ()=> applyRenderSettings(getEffectiveSettings(currentSlide)), markInteraction);
 
   syncUIFromSettings(ui, settings);
+  refreshControls();
   updateHalftoneVisibility(ui, settings);
   updateMotionVisibility(ui, settings);
   updatePipelineVisibility(ui, settings);
@@ -829,6 +837,38 @@ export function initApp(){
       }
     },
   });
+
+  controls = createControls({
+    settings,
+    saveSettings,
+    postFX,
+    layerManager,
+    getSlides: () => slides,
+    getCurrentIndex: () => currentSlideIndex,
+    setCurrentSlide,
+    nextSlide,
+    prevSlide,
+    updateRenderMode,
+    updatePipelineVisibility: () => updatePipelineVisibility(ui, settings),
+    applyToneSettings,
+    refreshSlide,
+    updateTransition: (value) => {
+      transitionDuration = value;
+    },
+    updateTransitionSoftness: (value) => {
+      transitionMat.uniforms.softness.value = value;
+    },
+    updateChromSplit: (value) => {
+      transitionMat.uniforms.rgbSplit.value = value;
+    },
+    markInteraction,
+  });
+
+  const baseTimelineRender = timeline.render;
+  timeline.render = () => {
+    baseTimelineRender();
+    controls?.refreshPlaylist();
+  };
 
   function rebuildParticles(){
     if(points){
@@ -1364,6 +1404,7 @@ export function initApp(){
         Object.assign(settings, DEFAULTS, data.settings);
         saveSettings(settings);
         syncUIFromSettings(ui, settings);
+        refreshControls();
         updateHalftoneVisibility(ui, settings);
         updateMotionVisibility(ui, settings);
         updatePipelineVisibility(ui, settings);
