@@ -42,6 +42,51 @@ export function createTimelineManager({
     return row;
   }
 
+  function createPreview(slide){
+    const preview = document.createElement("div");
+    preview.className = "timeline-preview";
+    if(slide.type === "text"){
+      const textWrap = document.createElement("div");
+      textWrap.className = "timeline-preview-text";
+      const title = slide.title || "Text slide";
+      const sub = slide.sub || "";
+      textWrap.textContent = sub ? `${title} — ${sub}` : title;
+      preview.appendChild(textWrap);
+      return preview;
+    }
+
+    const source = slide.dataUrl || slide.img?.src || slide.video?.src;
+    if(slide.type === "image" && source){
+      const img = document.createElement("img");
+      img.alt = slide.name || "Slide preview";
+      img.loading = "lazy";
+      img.src = source;
+      preview.appendChild(img);
+      return preview;
+    }
+
+    if(slide.type === "video" && source){
+      const video = document.createElement("video");
+      video.src = source;
+      video.muted = true;
+      video.loop = true;
+      video.playsInline = true;
+      video.autoplay = true;
+      video.preload = "metadata";
+      video.addEventListener("canplay", () => {
+        video.play().catch(() => {});
+      }, { once: true });
+      preview.appendChild(video);
+      return preview;
+    }
+
+    const fallback = document.createElement("div");
+    fallback.className = "timeline-preview-text";
+    fallback.textContent = "Preview unavailable";
+    preview.appendChild(fallback);
+    return preview;
+  }
+
   function updateActive(){
     const cards = timelineEl.querySelectorAll(".timeline-card");
     const currentIndex = getCurrentIndex();
@@ -140,6 +185,8 @@ export function createTimelineManager({
 
       actions.append(dragHandle, btnSelect, btnUp, btnDown, btnDelete);
       header.append(titleWrap, actions);
+
+      const preview = createPreview(slide);
 
       const settingsWrap = document.createElement("div");
       settingsWrap.className = "timeline-settings";
@@ -364,7 +411,7 @@ export function createTimelineManager({
       });
 
       settingsWrap.appendChild(details);
-      card.append(header, layerStack, settingsWrap);
+      card.append(header, preview, layerStack, settingsWrap);
       timelineEl.appendChild(card);
     });
 

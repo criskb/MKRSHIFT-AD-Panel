@@ -165,5 +165,7 @@ export function isSupportedFile(file){
     return true;
   }
   const name = (file.name || "").toLowerCase();
-  return name.endsWith(".gif") || name.endsWith(".mp4") || name.endsWith(".webm");
+  const imageExts = [".gif", ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".svg"];
+  const videoExts = [".mp4", ".webm", ".mov", ".m4v"];
+  return imageExts.some((ext) => name.endsWith(ext)) || videoExts.some((ext) => name.endsWith(ext));
 }
