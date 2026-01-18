@@ -1,15 +1,28 @@
 import * as THREE from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { AfterimagePass } from "three/addons/postprocessing/AfterimagePass.js";
 import { GlitchPass } from "three/addons/postprocessing/GlitchPass.js";
 import { RGBShiftShader } from "three/addons/shaders/RGBShiftShader.js";
-import { FXAAShader } from "three/addons/shaders/FXAAShader.js";
 import { FilmPass } from "three/addons/postprocessing/FilmPass.js";
 import { DotScreenPass } from "three/addons/postprocessing/DotScreenPass.js";
 import { HalftonePass } from "three/addons/postprocessing/HalftonePass.js";
+import { VignetteShader } from "three/addons/shaders/VignetteShader.js";
+
+export const POSTFX_PRESETS = {
+  none: { enabled: false, effects: [] },
+  clean: { effects: [] },
+  neon: { effects: ["bloom", "rgbShift", "film"] },
+  vignette: { effects: ["vignette"] },
+  halftone: { effects: ["halftone"] },
+  afterimage: { effects: ["afterimage"] },
+  glitch: { effects: ["glitch", "rgbShift"] },
+  dotscreen: { effects: ["dotscreen"] },
+  crt: { effects: ["film", "rgbShift"] },
+};
 
 export class PostFXManager {
   constructor(renderer, scene, camera) {
@@ -17,14 +30,16 @@ export class PostFXManager {
     this.scene = scene;
     this.camera = camera;
 
-    this.enabled = false;
-    this.mode = "none";
+    this.enabled = true;
+    this.mode = "clean";
     this.passes = {};
     this.composer = null;
+    this.effects = new Map();
 
     this.size = new THREE.Vector2(1, 1);
     this.dpr = 1;
 
+    this.presets = POSTFX_PRESETS;
     this.settings = {
       bloom: { strength: 0.7, radius: 0.25, threshold: 0.85 },
       afterimage: { damp: 0.9 },
@@ -38,31 +53,126 @@ export class PostFXManager {
         rotateB: Math.PI / 12,
       },
       dotscreen: { scale: 1.5, angle: 1.2 },
+      vignette: { offset: 1.0, darkness: 1.2 },
     };
-  }
 
-  initComposerIfNeeded() {
-    if (this.composer) return;
-    this.rebuildChain();
-  }
-
-  setSize(w, h, dpr = 1) {
-    this.size.set(w, h);
-    this.dpr = dpr;
-    if (this.composer) this.composer.setSize(w, h);
-    if (this.passes.fxaa?.material?.uniforms?.resolution) {
-      this.passes.fxaa.material.uniforms.resolution.value.set(
-        1 / (w * dpr),
-        1 / (h * dpr),
-      );
-    }
+    this.applyPreset(this.mode);
   }
 
   setMode(mode) {
     this.mode = mode;
-    this.enabled = mode !== "none";
-    this.initComposerIfNeeded();
+    if (mode === "none") {
+      this.enabled = false;
+      this.effects.clear();
+      this.rebuildChain();
+      return;
+    }
+    this.enabled = true;
+    this.applyPreset(mode);
+  }
+
+  addEffect(name, pass = null, { enabled = true, rebuild = true } = {}) {
+    const effectPass = pass ?? this.createPass(name);
+    if (!effectPass) return null;
+    this.effects.set(name, { pass: effectPass, enabled });
+    if (rebuild) this.rebuildChain();
+    return effectPass;
+  }
+
+  removeEffect(name, { rebuild = true } = {}) {
+    this.effects.delete(name);
+    if (rebuild) this.rebuildChain();
+  }
+
+  toggleEffect(name, enabled) {
+    const effect = this.effects.get(name);
+    if (!effect) return;
+    effect.enabled = enabled ?? !effect.enabled;
     this.rebuildChain();
+  }
+
+  reorderEffects(order = []) {
+    const reordered = new Map();
+    order.forEach((name) => {
+      const effect = this.effects.get(name);
+      if (effect) reordered.set(name, effect);
+    });
+    for (const [name, effect] of this.effects.entries()) {
+      if (!reordered.has(name)) reordered.set(name, effect);
+    }
+    this.effects = reordered;
+    this.rebuildChain();
+  }
+
+  applyPreset(name) {
+    const preset = this.presets[name];
+    if (!preset) return;
+    this.mode = name;
+    this.enabled = preset.enabled !== false;
+    this.effects.clear();
+    preset.effects.forEach((effectName) => {
+      this.addEffect(effectName, null, { rebuild: false });
+    });
+    this.rebuildChain();
+  }
+
+  createPass(name) {
+    switch (name) {
+      case "bloom": {
+        return new UnrealBloomPass(
+          new THREE.Vector2(this.size.x, this.size.y),
+          this.settings.bloom.strength,
+          this.settings.bloom.radius,
+          this.settings.bloom.threshold,
+        );
+      }
+      case "afterimage": {
+        const afterPass = new AfterimagePass();
+        afterPass.uniforms.damp.value = this.settings.afterimage.damp;
+        return afterPass;
+      }
+      case "glitch": {
+        const glitch = new GlitchPass();
+        glitch.goWild = this.settings.glitch.wild;
+        return glitch;
+      }
+      case "halftone": {
+        return new HalftonePass(this.size.x, this.size.y, {
+          radius: this.settings.halftone.radius,
+          rotateR: this.settings.halftone.rotateR,
+          rotateG: this.settings.halftone.rotateG,
+          rotateB: this.settings.halftone.rotateB,
+        });
+      }
+      case "dotscreen": {
+        return new DotScreenPass(
+          new THREE.Vector2(0, 0),
+          this.settings.dotscreen.angle,
+          this.settings.dotscreen.scale,
+        );
+      }
+      case "rgbShift": {
+        const rgb = new ShaderPass(RGBShiftShader);
+        rgb.uniforms.amount.value = this.settings.rgbShift.amount;
+        return rgb;
+      }
+      case "film": {
+        return new FilmPass(
+          this.settings.film.noise,
+          this.settings.film.scanlines,
+          this.settings.film.scanlineCount,
+          this.settings.film.grayscale,
+        );
+      }
+      case "vignette": {
+        const vignette = new ShaderPass(VignetteShader);
+        vignette.uniforms.offset.value = this.settings.vignette.offset;
+        vignette.uniforms.darkness.value = this.settings.vignette.darkness;
+        return vignette;
+      }
+      default:
+        return null;
+    }
   }
 
   rebuildChain() {
@@ -74,77 +184,15 @@ export class PostFXManager {
     this.passes.render = renderPass;
     this.composer.addPass(renderPass);
 
-    if (this.mode === "neon") {
-      const bloomPass = new UnrealBloomPass(
-        new THREE.Vector2(this.size.x, this.size.y),
-        this.settings.bloom.strength,
-        this.settings.bloom.radius,
-        this.settings.bloom.threshold,
-      );
-      this.passes.bloom = bloomPass;
-      this.composer.addPass(bloomPass);
+    for (const [name, effect] of this.effects.entries()) {
+      if (!effect.enabled) continue;
+      this.passes[name] = effect.pass;
+      this.composer.addPass(effect.pass);
     }
 
-    if (this.mode === "afterimage") {
-      const afterPass = new AfterimagePass();
-      afterPass.uniforms.damp.value = this.settings.afterimage.damp;
-      this.passes.afterimage = afterPass;
-      this.composer.addPass(afterPass);
-    }
-
-    if (this.mode === "glitch") {
-      const glitch = new GlitchPass();
-      glitch.goWild = this.settings.glitch.wild;
-      this.passes.glitch = glitch;
-      this.composer.addPass(glitch);
-    }
-
-    if (this.mode === "halftone") {
-      const halftone = new HalftonePass(this.size.x, this.size.y, {
-        radius: this.settings.halftone.radius,
-        rotateR: this.settings.halftone.rotateR,
-        rotateG: this.settings.halftone.rotateG,
-        rotateB: this.settings.halftone.rotateB,
-      });
-      this.passes.halftone = halftone;
-      this.composer.addPass(halftone);
-    }
-
-    if (this.mode === "dotscreen") {
-      const dot = new DotScreenPass(
-        new THREE.Vector2(0, 0),
-        this.settings.dotscreen.angle,
-        this.settings.dotscreen.scale,
-      );
-      this.passes.dotscreen = dot;
-      this.composer.addPass(dot);
-    }
-
-    if (this.mode === "neon" || this.mode === "glitch") {
-      const rgb = new ShaderPass(RGBShiftShader);
-      rgb.uniforms.amount.value = this.settings.rgbShift.amount;
-      this.passes.rgbShift = rgb;
-      this.composer.addPass(rgb);
-    }
-
-    if (this.mode === "crt" || this.mode === "neon") {
-      const film = new FilmPass(
-        this.settings.film.noise,
-        this.settings.film.scanlines,
-        this.settings.film.scanlineCount,
-        this.settings.film.grayscale,
-      );
-      this.passes.film = film;
-      this.composer.addPass(film);
-    }
-
-    const fxaa = new ShaderPass(FXAAShader);
-    fxaa.material.uniforms.resolution.value.set(
-      1 / (this.size.x * this.dpr),
-      1 / (this.size.y * this.dpr),
-    );
-    this.passes.fxaa = fxaa;
-    this.composer.addPass(fxaa);
+    const outputPass = new OutputPass();
+    this.passes.output = outputPass;
+    this.composer.addPass(outputPass);
   }
 
   render(delta) {
@@ -153,5 +201,22 @@ export class PostFXManager {
       return;
     }
     this.composer.render(delta);
+  }
+
+  setSize(w, h, dpr = 1) {
+    this.size.set(w, h);
+    this.dpr = dpr;
+    if (this.composer) this.composer.setSize(w, h);
+    for (const effect of this.effects.values()) {
+      if (typeof effect.pass.setSize === "function") {
+        effect.pass.setSize(w, h);
+      }
+      if (effect.pass.material?.uniforms?.resolution) {
+        effect.pass.material.uniforms.resolution.value.set(
+          1 / (w * dpr),
+          1 / (h * dpr),
+        );
+      }
+    }
   }
 }
