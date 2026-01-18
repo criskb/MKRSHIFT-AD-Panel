@@ -30,6 +30,7 @@ import {
   updatePipelineVisibility,
 } from "./ui.js";
 import { createControls } from "./ui/controls.js";
+import { createPlaylist, touchPlaylist, DRAFT_STORAGE_KEY } from "./playlist.js";
 
 export function initApp(){
   const settings = loadSettings();
@@ -44,6 +45,8 @@ export function initApp(){
   const dz = el("dropzone");
   const drawerList = el("drawerList");
   const canvasDropZone = el("canvasDropZone");
+  const btnSaveDraft = el("btnSaveDraft");
+  const btnLoadDraft = el("btnLoadDraft");
 
   const toastEl = el("toast");
   let toastTimer = null;
@@ -55,6 +58,14 @@ export function initApp(){
     toastTimer = setTimeout(()=>toastEl.classList.remove("show"), 2400);
   }
 
+  let draftSaveTimer = null;
+  function scheduleDraftSave(){
+    clearTimeout(draftSaveTimer);
+    draftSaveTimer = setTimeout(() => {
+      void saveDraftToLocalStorage(true);
+    }, 800);
+  }
+
   function setPanelVisible(v){
     panel.classList.toggle("hidden", !v);
     if(v) markInteraction();
@@ -64,7 +75,12 @@ export function initApp(){
     if(settings.preset === "Custom") return;
     settings.preset = "Custom";
     if(ui.preset) ui.preset.value = "Custom";
-    saveSettings(settings);
+    saveSettingsAndDraft(settings);
+  }
+
+  function saveSettingsAndDraft(nextSettings){
+    saveSettings(nextSettings);
+    scheduleDraftSave();
   }
 
   let controls = null;
@@ -91,7 +107,7 @@ export function initApp(){
       settings.sharpen = preset.effects.sharpen ?? settings.sharpen;
       settings.chromSplit = preset.effects.chromSplit ?? settings.chromSplit;
     }
-    saveSettings(settings);
+    saveSettingsAndDraft(settings);
     syncUIFromSettings(ui, settings);
     refreshControls();
     postFX.settings.bloom.strength = settings.bloomStrength;
@@ -260,9 +276,11 @@ export function initApp(){
     const slide = { type:"text", title, sub };
     ensureSlideId(slide);
     slides.push(slide);
+    touchPlaylist(playlist);
     currentSlideIndex = slides.length - 1;
     setCurrentSlide(currentSlideIndex);
     timeline.render();
+    scheduleDraftSave();
     markInteraction();
   });
 
@@ -271,14 +289,18 @@ export function initApp(){
   ui.btnRemove.addEventListener("click", ()=>{
     if(slides.length <= 1) return;
     slides.splice(currentSlideIndex,1);
+    touchPlaylist(playlist);
     currentSlideIndex = (currentSlideIndex + slides.length) % slides.length;
     setCurrentSlide(currentSlideIndex);
     timeline.render();
+    scheduleDraftSave();
     markInteraction();
   });
 
   ui.saveButton.addEventListener("click", ()=>{ void saveProject(); });
+  btnSaveDraft?.addEventListener("click", ()=>{ void saveDraftToLocalStorage(false); });
   ui.btnLoadProject.addEventListener("click", ()=> ui.projectFile.click());
+  btnLoadDraft?.addEventListener("click", ()=>{ void loadDraftFromLocalStorage(); });
   ui.projectFile.addEventListener("change", ()=> {
     const file = ui.projectFile.files?.[0];
     if(!file) return;
@@ -288,7 +310,7 @@ export function initApp(){
 
   ui.resetButton.addEventListener("click", ()=>{
     Object.assign(settings, DEFAULTS);
-    saveSettings(settings);
+    saveSettingsAndDraft(settings);
     syncUIFromSettings(ui, settings);
     refreshControls();
     updateHalftoneVisibility(ui, settings);
@@ -777,63 +799,63 @@ export function initApp(){
     return clamp(parseFloat(slide?.transition ?? settings.transition) || settings.transition, 0.6, 10);
   }
 
-  bindRange(ui.dotsize, ui.dotsizeVal, settings, "dotSize", saveSettings, ()=>{
+  bindRange(ui.dotsize, ui.dotsizeVal, settings, "dotSize", saveSettingsAndDraft, ()=>{
     applyRenderSettings(getEffectiveSettings(currentSlide));
     syncParticlesToDotSize();
   }, markInteraction);
-  bindRange(ui.sizeVariance, ui.sizeVarianceVal, settings, "sizeVariance", saveSettings, ()=>{
+  bindRange(ui.sizeVariance, ui.sizeVarianceVal, settings, "sizeVariance", saveSettingsAndDraft, ()=>{
     updateSizeVariance();
     markInteraction();
   }, markInteraction);
-  bindRange(ui.softness, ui.softnessVal, settings, "softness", saveSettings, ()=> applyRenderSettings(getEffectiveSettings(currentSlide)), markInteraction);
-  bindRange(ui.threshold, ui.thresholdVal, settings, "threshold", saveSettings, ()=>{}, markInteraction);
-  bindRange(ui.swirl, ui.swirlVal, settings, "swirl", saveSettings, ()=> applyRenderSettings(getEffectiveSettings(currentSlide)), markInteraction);
-  bindRange(ui.jitter, ui.jitterVal, settings, "jitter", saveSettings, ()=> applyRenderSettings(getEffectiveSettings(currentSlide)), markInteraction);
+  bindRange(ui.softness, ui.softnessVal, settings, "softness", saveSettingsAndDraft, ()=> applyRenderSettings(getEffectiveSettings(currentSlide)), markInteraction);
+  bindRange(ui.threshold, ui.thresholdVal, settings, "threshold", saveSettingsAndDraft, ()=>{}, markInteraction);
+  bindRange(ui.swirl, ui.swirlVal, settings, "swirl", saveSettingsAndDraft, ()=> applyRenderSettings(getEffectiveSettings(currentSlide)), markInteraction);
+  bindRange(ui.jitter, ui.jitterVal, settings, "jitter", saveSettingsAndDraft, ()=> applyRenderSettings(getEffectiveSettings(currentSlide)), markInteraction);
   ui.shape.addEventListener("change", ()=>{
     settings.shape = ui.shape.value;
-    saveSettings(settings);
+    saveSettingsAndDraft(settings);
     applyRenderSettings(getEffectiveSettings(currentSlide));
     markInteraction();
   });
   ui.animEffect.addEventListener("change", ()=>{
     settings.animEffect = ui.animEffect.value;
-    saveSettings(settings);
+    saveSettingsAndDraft(settings);
     updateMotionVisibility(ui, settings);
     applyRenderSettings(getEffectiveSettings(currentSlide));
     markInteraction();
   });
-  bindRange(ui.ditherStrength, ui.ditherStrengthVal, settings, "ditherStrength", saveSettings, ()=>{ refreshSlide(true); }, markInteraction);
-  bindRange(ui.brightness, ui.brightnessVal, settings, "brightness", saveSettings, ()=>{ markPresetCustom(); refreshSlide(true); }, markInteraction);
-  bindRange(ui.contrast, ui.contrastVal, settings, "contrast", saveSettings, ()=>{ markPresetCustom(); refreshSlide(true); }, markInteraction);
-  bindRange(ui.saturation, ui.saturationVal, settings, "saturation", saveSettings, ()=>{ markPresetCustom(); refreshSlide(true); }, markInteraction);
-  bindRange(ui.gamma, ui.gammaVal, settings, "gamma", saveSettings, ()=>{ markPresetCustom(); refreshSlide(true); }, markInteraction);
-  bindRange(ui.bloomStrength, ui.bloomStrengthVal, settings, "bloomStrength", saveSettings, ()=> {
+  bindRange(ui.ditherStrength, ui.ditherStrengthVal, settings, "ditherStrength", saveSettingsAndDraft, ()=>{ refreshSlide(true); }, markInteraction);
+  bindRange(ui.brightness, ui.brightnessVal, settings, "brightness", saveSettingsAndDraft, ()=>{ markPresetCustom(); refreshSlide(true); }, markInteraction);
+  bindRange(ui.contrast, ui.contrastVal, settings, "contrast", saveSettingsAndDraft, ()=>{ markPresetCustom(); refreshSlide(true); }, markInteraction);
+  bindRange(ui.saturation, ui.saturationVal, settings, "saturation", saveSettingsAndDraft, ()=>{ markPresetCustom(); refreshSlide(true); }, markInteraction);
+  bindRange(ui.gamma, ui.gammaVal, settings, "gamma", saveSettingsAndDraft, ()=>{ markPresetCustom(); refreshSlide(true); }, markInteraction);
+  bindRange(ui.bloomStrength, ui.bloomStrengthVal, settings, "bloomStrength", saveSettingsAndDraft, ()=> {
     markPresetCustom();
     postFX.settings.bloom.strength = settings.bloomStrength;
     postFX.rebuildChain();
     syncPostFXRenderSource();
   }, markInteraction);
-  bindRange(ui.trailDamp, ui.trailDampVal, settings, "trailDamp", saveSettings, ()=> {
+  bindRange(ui.trailDamp, ui.trailDampVal, settings, "trailDamp", saveSettingsAndDraft, ()=> {
     markPresetCustom();
     postFX.settings.afterimage.damp = settings.trailDamp;
     postFX.rebuildChain();
     syncPostFXRenderSource();
   }, markInteraction);
-  bindRange(ui.vignette, ui.vignetteVal, settings, "vignette", saveSettings, ()=>{ markPresetCustom(); refreshSlide(true); }, markInteraction);
-  bindRange(ui.grain, ui.grainVal, settings, "grain", saveSettings, ()=>{ markPresetCustom(); refreshSlide(true); }, markInteraction);
-  bindRange(ui.sharpen, ui.sharpenVal, settings, "sharpen", saveSettings, ()=>{ markPresetCustom(); refreshSlide(true); }, markInteraction);
-  bindRange(ui.chromSplit, ui.chromSplitVal, settings, "chromSplit", saveSettings, ()=>{ 
+  bindRange(ui.vignette, ui.vignetteVal, settings, "vignette", saveSettingsAndDraft, ()=>{ markPresetCustom(); refreshSlide(true); }, markInteraction);
+  bindRange(ui.grain, ui.grainVal, settings, "grain", saveSettingsAndDraft, ()=>{ markPresetCustom(); refreshSlide(true); }, markInteraction);
+  bindRange(ui.sharpen, ui.sharpenVal, settings, "sharpen", saveSettingsAndDraft, ()=>{ markPresetCustom(); refreshSlide(true); }, markInteraction);
+  bindRange(ui.chromSplit, ui.chromSplitVal, settings, "chromSplit", saveSettingsAndDraft, ()=>{ 
     markPresetCustom();
     transitionMat.uniforms.rgbSplit.value = settings.chromSplit;
     refreshSlide(true);
   }, markInteraction);
-  bindRange(ui.transitionSoftness, ui.transitionSoftnessVal, settings, "transitionSoftness", saveSettings, ()=> {
+  bindRange(ui.transitionSoftness, ui.transitionSoftnessVal, settings, "transitionSoftness", saveSettingsAndDraft, ()=> {
     markPresetCustom();
     transitionMat.uniforms.softness.value = settings.transitionSoftness;
   }, markInteraction);
-  bindRange(ui.oscAmplitude, ui.oscAmplitudeVal, settings, "oscAmplitude", saveSettings, ()=> applyRenderSettings(getEffectiveSettings(currentSlide)), markInteraction);
-  bindRange(ui.oscFrequency, ui.oscFrequencyVal, settings, "oscFrequency", saveSettings, ()=> applyRenderSettings(getEffectiveSettings(currentSlide)), markInteraction);
-  bindRange(ui.oscSpeed, ui.oscSpeedVal, settings, "oscSpeed", saveSettings, ()=> applyRenderSettings(getEffectiveSettings(currentSlide)), markInteraction);
+  bindRange(ui.oscAmplitude, ui.oscAmplitudeVal, settings, "oscAmplitude", saveSettingsAndDraft, ()=> applyRenderSettings(getEffectiveSettings(currentSlide)), markInteraction);
+  bindRange(ui.oscFrequency, ui.oscFrequencyVal, settings, "oscFrequency", saveSettingsAndDraft, ()=> applyRenderSettings(getEffectiveSettings(currentSlide)), markInteraction);
+  bindRange(ui.oscSpeed, ui.oscSpeedVal, settings, "oscSpeed", saveSettingsAndDraft, ()=> applyRenderSettings(getEffectiveSettings(currentSlide)), markInteraction);
 
   syncUIFromSettings(ui, settings);
   refreshControls();
@@ -844,41 +866,41 @@ export function initApp(){
   ui.gridSize.addEventListener("input", ()=>{
     settings.gridSize = clamp(parseInt(ui.gridSize.value || "16", 10), 2, 200);
     ui.gridSize.value = settings.gridSize;
-    saveSettings(settings);
+    saveSettingsAndDraft(settings);
     refreshSlide(true);
     markInteraction();
   });
   ui.smoothing.addEventListener("input", ()=>{
     settings.smoothing = clamp(parseFloat(ui.smoothing.value || "0"), 0, 1);
     ui.smoothing.value = settings.smoothing;
-    saveSettings(settings);
+    saveSettingsAndDraft(settings);
     refreshSlide(true);
     markInteraction();
   });
   ui.ditherType.addEventListener("change", ()=>{
     settings.ditherType = ui.ditherType.value;
-    saveSettings(settings);
+    saveSettingsAndDraft(settings);
     refreshSlide(true);
     markInteraction();
   });
 
   ui.autoplay.addEventListener("change", ()=>{
     settings.autoplay = ui.autoplay.value === "1";
-    saveSettings(settings);
+    saveSettingsAndDraft(settings);
     nextAuto = nowS() + getSlideDuration(currentSlide);
     markInteraction();
   });
   ui.interval.addEventListener("change", ()=>{
     settings.interval = clamp(parseFloat(ui.interval.value)||8,2,60);
     ui.interval.value = settings.interval;
-    saveSettings(settings);
+    saveSettingsAndDraft(settings);
     nextAuto = nowS() + getSlideDuration(currentSlide);
     markInteraction();
   });
   ui.transition.addEventListener("change", ()=>{
     settings.transition = clamp(parseFloat(ui.transition.value)||2.2,0.6,10);
     ui.transition.value = settings.transition;
-    saveSettings(settings);
+    saveSettingsAndDraft(settings);
     if(!transitioning){
       morphDur = getSlideTransition(currentSlide);
     }
@@ -886,14 +908,14 @@ export function initApp(){
   });
   ui.renderMode.addEventListener("change", ()=>{
     settings.renderMode = ui.renderMode.value;
-    saveSettings(settings);
+    saveSettingsAndDraft(settings);
     updatePipelineVisibility(ui, settings);
     updateRenderMode();
     markInteraction();
   });
   ui.pipeline.addEventListener("change", ()=>{
     settings.pipeline = ui.pipeline.value;
-    saveSettings(settings);
+    saveSettingsAndDraft(settings);
     postFX.setMode(settings.pipeline);
     postFX.enabled = !document.hidden && postFX.mode !== "none";
     syncPostFXRenderSource();
@@ -904,7 +926,7 @@ export function initApp(){
     const presetName = ui.preset.value;
     if(presetName === "Custom"){
       settings.preset = "Custom";
-      saveSettings(settings);
+      saveSettingsAndDraft(settings);
       markInteraction();
       return;
     }
@@ -915,7 +937,7 @@ export function initApp(){
     const v = clamp(parseInt(ui.particles.value||"18000",10), 1, 80000);
     ui.particles.value = v;
     settings.maxParticles = v;
-    saveSettings(settings);
+    saveSettingsAndDraft(settings);
     rebuildParticles();
     markInteraction();
   });
@@ -929,7 +951,7 @@ export function initApp(){
     if(v === settings.maxParticles) return;
     settings.maxParticles = v;
     ui.particles.value = v;
-    saveSettings(settings);
+    saveSettingsAndDraft(settings);
     rebuildParticles();
   }
 
@@ -950,25 +972,25 @@ export function initApp(){
 
   ui.mode.addEventListener("change", ()=>{
     settings.mode = ui.mode.value;
-    saveSettings(settings);
+    saveSettingsAndDraft(settings);
     updateHalftoneVisibility(ui, settings);
     refreshSlide(true);
     markInteraction();
   });
-  ui.dither.addEventListener("change", ()=>{settings.dither = ui.dither.value; saveSettings(settings); refreshSlide(true); markInteraction();});
-  ui.brightness.addEventListener("change", ()=>{settings.brightness = parseFloat(ui.brightness.value); saveSettings(settings); refreshSlide(true); markInteraction();});
-  ui.contrast.addEventListener("change", ()=>{settings.contrast = parseFloat(ui.contrast.value); saveSettings(settings); refreshSlide(true); markInteraction();});
-  ui.saturation.addEventListener("change", ()=>{settings.saturation = parseFloat(ui.saturation.value); saveSettings(settings); refreshSlide(true); markInteraction();});
-  ui.gamma.addEventListener("change", ()=>{settings.gamma = parseFloat(ui.gamma.value); saveSettings(settings); refreshSlide(true); markInteraction();});
+  ui.dither.addEventListener("change", ()=>{settings.dither = ui.dither.value; saveSettingsAndDraft(settings); refreshSlide(true); markInteraction();});
+  ui.brightness.addEventListener("change", ()=>{settings.brightness = parseFloat(ui.brightness.value); saveSettingsAndDraft(settings); refreshSlide(true); markInteraction();});
+  ui.contrast.addEventListener("change", ()=>{settings.contrast = parseFloat(ui.contrast.value); saveSettingsAndDraft(settings); refreshSlide(true); markInteraction();});
+  ui.saturation.addEventListener("change", ()=>{settings.saturation = parseFloat(ui.saturation.value); saveSettingsAndDraft(settings); refreshSlide(true); markInteraction();});
+  ui.gamma.addEventListener("change", ()=>{settings.gamma = parseFloat(ui.gamma.value); saveSettingsAndDraft(settings); refreshSlide(true); markInteraction();});
   ui.oscMode.addEventListener("change", ()=>{
     settings.oscMode = ui.oscMode.value;
     applyRenderSettings(getEffectiveSettings(currentSlide));
-    saveSettings(settings);
+    saveSettingsAndDraft(settings);
     markInteraction();
   });
   ui.blend.addEventListener("change", ()=>{
     settings.blend = ui.blend.value;
-    saveSettings(settings);
+    saveSettingsAndDraft(settings);
     applyRenderSettings(getEffectiveSettings(currentSlide));
     markInteraction();
   });
@@ -1004,12 +1026,14 @@ export function initApp(){
     slide.id = slideIdCounter;
   }
 
-  let slides = [
+  const initialSlides = [
     { type:"text", title:"MKRShift", sub:"3D • AI • Creative Tech" },
     { type:"text", title:"PRINT" , sub:"Prototypes • Toys • Props" },
     { type:"text", title:"DESIGN" , sub:"Concepts • Visuals • Tools" },
   ];
-  slides.forEach(ensureSlideId);
+  initialSlides.forEach(ensureSlideId);
+  let playlist = createPlaylist({ name: "Main Playlist", slides: initialSlides });
+  let slides = playlist.slides;
   let currentSlideIndex = 0;
 
   let aStart, aEnd, aColorStart, aColorEnd, aAlphaStart, aAlphaEnd, aSeed, aSize;
@@ -1022,6 +1046,13 @@ export function initApp(){
     return overrides;
   }
 
+  function setSlidesList(next){
+    slides = next;
+    playlist.slides = next;
+    touchPlaylist(playlist);
+    scheduleDraftSave();
+  }
+
   function applySlideOverrides(slide){
     const activeSettings = { ...getEffectiveSettings(slide), stableSample: slide.stableSample };
     applyRenderSettings(activeSettings);
@@ -1030,7 +1061,7 @@ export function initApp(){
     timelineEl: ui.timeline,
     settings,
     getSlides: () => slides,
-    setSlides: (next) => { slides = next; },
+    setSlides: setSlidesList,
     getCurrentIndex: () => currentSlideIndex,
     setCurrentIndex: (next) => { currentSlideIndex = next; },
     setCurrentSlide,
@@ -1046,11 +1077,12 @@ export function initApp(){
         nextAuto = nowS() + getSlideDuration(slide);
       }
     },
+    scheduleDraftSave,
   });
 
   controls = createControls({
     settings,
-    saveSettings,
+    saveSettings: saveSettingsAndDraft,
     postFX,
     layerManager,
     getSlides: () => slides,
@@ -1548,9 +1580,11 @@ export function initApp(){
         slides.push(slide);
       }
     }
+    touchPlaylist(playlist);
     currentSlideIndex = slides.length - 1;
     setCurrentSlide(currentSlideIndex);
     timeline.render();
+    scheduleDraftSave();
   }
 
 
@@ -1581,12 +1615,157 @@ export function initApp(){
       }
       slidePayloads.push(base);
     }
+    touchPlaylist(playlist);
     return {
-      version: 1,
+      version: 2,
       savedAt: new Date().toISOString(),
+      playlist: {
+        id: playlist.id,
+        name: playlist.name,
+        createdAt: playlist.createdAt,
+        updatedAt: playlist.updatedAt,
+        version: playlist.version,
+      },
       settings: { ...settings },
       slides: slidePayloads,
     };
+  }
+
+  async function saveDraftToLocalStorage(silent = true){
+    try{
+      const payload = await buildProjectPayload();
+      localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(payload));
+      if(!silent){
+        toast("Draft saved");
+      }
+    } catch(err){
+      console.error(err);
+      if(!silent){
+        toast("Failed to save draft");
+      }
+    }
+  }
+
+  async function loadProjectFromData(data, { source } = {}){
+    if(data?.settings){
+      Object.assign(settings, DEFAULTS, data.settings);
+      saveSettingsAndDraft(settings);
+      syncUIFromSettings(ui, settings);
+      refreshControls();
+      updateHalftoneVisibility(ui, settings);
+      updateMotionVisibility(ui, settings);
+      updatePipelineVisibility(ui, settings);
+      updateRenderMode();
+    }
+
+    if(data?.playlist){
+      playlist = createPlaylist({
+        id: data.playlist.id,
+        name: data.playlist.name,
+        slides,
+        createdAt: data.playlist.createdAt,
+        updatedAt: data.playlist.updatedAt,
+        version: data.playlist.version ?? 1,
+      });
+    }
+
+    const loadedSlides = [];
+    if(Array.isArray(data?.slides)){
+      for(const slideData of data.slides){
+        if(slideData?.type === "text"){
+          const slide = {
+            type: "text",
+            title: slideData.title || "Text slide",
+            sub: slideData.sub || "",
+            duration: slideData.duration,
+            transition: slideData.transition,
+            overrides: slideData.overrides ?? null,
+            lockColor: slideData.lockColor ?? null,
+          };
+          ensureSlideId(slide);
+          loadedSlides.push(slide);
+          continue;
+        }
+        if(slideData?.dataUrl){
+          if(slideData.type === "image"){
+            const img = await loadImageFromDataUrl(slideData.dataUrl);
+            const animated = slideData.dataUrl.startsWith("data:image/gif");
+            if(animated){
+              attachAnimatedImage(img, mediaPool);
+            }
+            const slide = {
+              type: "image",
+              name: slideData.name,
+              img,
+              animated,
+              dataUrl: slideData.dataUrl,
+              duration: slideData.duration,
+              transition: slideData.transition,
+              overrides: slideData.overrides ?? null,
+              lockColor: slideData.lockColor ?? animated,
+              hasColorSampled: false,
+              stableSample: slideData.stableSample ?? animated,
+            };
+            ensureSlideId(slide);
+            loadedSlides.push(slide);
+          } else if(slideData.type === "video"){
+            const video = await loadVideoWithGate(() => loadVideoFromDataUrl(slideData.dataUrl));
+            if(!video) continue;
+            attachAnimatedVideo(video, mediaPool);
+            const slide = {
+              type: "video",
+              name: slideData.name,
+              video,
+              animated: true,
+              dataUrl: slideData.dataUrl,
+              duration: slideData.duration,
+              transition: slideData.transition,
+              overrides: slideData.overrides ?? null,
+              lockColor: slideData.lockColor ?? null,
+            };
+            ensureSlideId(slide);
+            loadedSlides.push(slide);
+          }
+        }
+      }
+    }
+
+    if(!loadedSlides.length){
+      toast("No slides found in project");
+      return;
+    }
+
+    slides = loadedSlides;
+    playlist.slides = slides;
+    touchPlaylist(playlist);
+    currentSlideIndex = 0;
+    rebuildParticles();
+    timeline.render();
+    nextAuto = nowS() + getSlideDuration(slides[currentSlideIndex]);
+    if(window.DotScreen){
+      window.DotScreen.playlist = playlist;
+      window.DotScreen.slides = slides;
+    }
+    if(source === "draft"){
+      toast("Draft loaded");
+    } else {
+      toast("Project loaded");
+    }
+  }
+
+  async function loadDraftFromLocalStorage(){
+    try{
+      const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
+      if(!raw){
+        toast("No draft found");
+        return;
+      }
+      const data = JSON.parse(raw);
+      await loadProjectFromData(data, { source: "draft" });
+    } catch(err){
+      console.error(err);
+      toast("Failed to load draft");
+    }
   }
 
   async function saveProject(){
@@ -1610,88 +1789,7 @@ export function initApp(){
     try{
       const raw = await file.text();
       const data = JSON.parse(raw);
-      if(data?.settings){
-        Object.assign(settings, DEFAULTS, data.settings);
-        saveSettings(settings);
-        syncUIFromSettings(ui, settings);
-        refreshControls();
-        updateHalftoneVisibility(ui, settings);
-        updateMotionVisibility(ui, settings);
-        updatePipelineVisibility(ui, settings);
-        updateRenderMode();
-      }
-      const loadedSlides = [];
-      if(Array.isArray(data?.slides)){
-        for(const slideData of data.slides){
-          if(slideData?.type === "text"){
-            const slide = {
-              type: "text",
-              title: slideData.title || "Text slide",
-              sub: slideData.sub || "",
-              duration: slideData.duration,
-              transition: slideData.transition,
-              overrides: slideData.overrides ?? null,
-              lockColor: slideData.lockColor ?? null,
-            };
-            ensureSlideId(slide);
-            loadedSlides.push(slide);
-            continue;
-          }
-          if(slideData?.dataUrl){
-            if(slideData.type === "image"){
-              const img = await loadImageFromDataUrl(slideData.dataUrl);
-              const animated = slideData.dataUrl.startsWith("data:image/gif");
-              if(animated){
-                attachAnimatedImage(img, mediaPool);
-              }
-              const slide = {
-                type: "image",
-                name: slideData.name,
-                img,
-                animated,
-                dataUrl: slideData.dataUrl,
-                duration: slideData.duration,
-                transition: slideData.transition,
-              overrides: slideData.overrides ?? null,
-              lockColor: slideData.lockColor ?? animated,
-              hasColorSampled: false,
-              stableSample: slideData.stableSample ?? animated,
-            };
-              ensureSlideId(slide);
-              loadedSlides.push(slide);
-            } else if(slideData.type === "video"){
-              const video = await loadVideoWithGate(() => loadVideoFromDataUrl(slideData.dataUrl));
-              if(!video) continue;
-              attachAnimatedVideo(video, mediaPool);
-              const slide = {
-                type: "video",
-                name: slideData.name,
-                video,
-                animated: true,
-                dataUrl: slideData.dataUrl,
-                duration: slideData.duration,
-                transition: slideData.transition,
-                overrides: slideData.overrides ?? null,
-                lockColor: slideData.lockColor ?? null,
-              };
-              ensureSlideId(slide);
-              loadedSlides.push(slide);
-            }
-          }
-        }
-      }
-
-      if(!loadedSlides.length){
-        toast("No slides found in project");
-        return;
-      }
-
-      slides = loadedSlides;
-      currentSlideIndex = 0;
-      rebuildParticles();
-      timeline.render();
-      nextAuto = nowS() + getSlideDuration(slides[currentSlideIndex]);
-      toast("Project loaded");
+      await loadProjectFromData(data, { source: "file" });
     } catch(err){
       console.error(err);
       toast("Failed to load project");
@@ -1815,6 +1913,7 @@ export function initApp(){
     open: ()=>setPanelVisible(true),
     close: ()=>setPanelVisible(false),
     settings,
+    playlist,
     slides,
   };
 

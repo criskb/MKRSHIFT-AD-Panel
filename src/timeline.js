@@ -1,3 +1,5 @@
+import Sortable from "sortablejs";
+
 export function createTimelineManager({
   timelineEl,
   settings,
@@ -14,6 +16,7 @@ export function createTimelineManager({
   createSlideOverrides,
   ensureSlideId,
   updateNextAuto,
+  scheduleDraftSave,
 }){
   if(!timelineEl){
     return {
@@ -21,6 +24,8 @@ export function createTimelineManager({
       updateActive: () => {},
     };
   }
+
+  let sortable = null;
 
   function createLabeledInput(labelText, inputEl){
     const row = document.createElement("div");
@@ -65,6 +70,12 @@ export function createTimelineManager({
       const actions = document.createElement("div");
       actions.className = "timeline-actions";
 
+      const dragHandle = document.createElement("button");
+      dragHandle.className = "btn tiny timeline-handle";
+      dragHandle.type = "button";
+      dragHandle.textContent = "↕";
+      dragHandle.title = "Drag to reorder";
+
       const btnSelect = document.createElement("button");
       btnSelect.className = "btn tiny";
       btnSelect.textContent = "Select";
@@ -86,6 +97,7 @@ export function createTimelineManager({
         else if(getCurrentIndex() === index - 1) setCurrentIndex(index + 1);
         setSlides(list);
         render();
+        scheduleDraftSave?.();
         markInteraction();
       });
 
@@ -103,6 +115,7 @@ export function createTimelineManager({
         else if(getCurrentIndex() === index + 1) setCurrentIndex(index - 1);
         setSlides(list);
         render();
+        scheduleDraftSave?.();
         markInteraction();
       });
 
@@ -118,10 +131,11 @@ export function createTimelineManager({
         setSlides(list);
         render();
         setCurrentSlide(getCurrentIndex());
+        scheduleDraftSave?.();
         markInteraction();
       });
 
-      actions.append(btnSelect, btnUp, btnDown, btnDelete);
+      actions.append(dragHandle, btnSelect, btnUp, btnDown, btnDelete);
       header.append(titleWrap, actions);
 
       const settingsWrap = document.createElement("div");
@@ -147,6 +161,7 @@ export function createTimelineManager({
         slide.duration = getSlideDuration({ duration: durationInput.value });
         durationInput.value = String(slide.duration);
         updateNextAuto(slide, index);
+        scheduleDraftSave?.();
         markInteraction();
       });
       details.appendChild(createLabeledInput("Duration (sec)", durationInput));
@@ -160,6 +175,7 @@ export function createTimelineManager({
       transitionInput.addEventListener("change", () => {
         slide.transition = getSlideTransition({ transition: transitionInput.value });
         transitionInput.value = String(slide.transition);
+        scheduleDraftSave?.();
         markInteraction();
       });
       details.appendChild(createLabeledInput("Transition (sec)", transitionInput));
@@ -264,6 +280,7 @@ export function createTimelineManager({
             applySlideOverrides(slide);
             refreshSlide(true);
           }
+          scheduleDraftSave?.();
           markInteraction();
         });
         controlInputs.push({ input, key: field.key });
@@ -286,6 +303,7 @@ export function createTimelineManager({
             applySlideOverrides(slide);
             refreshSlide(true);
           }
+          scheduleDraftSave?.();
           markInteraction();
         });
         controlInputs.push({ input: select, key: field.key });
@@ -307,6 +325,7 @@ export function createTimelineManager({
           applySlideOverrides(slide);
           refreshSlide(true);
         }
+        scheduleDraftSave?.();
         markInteraction();
       });
 
@@ -314,6 +333,36 @@ export function createTimelineManager({
       card.append(header, settingsWrap);
       timelineEl.appendChild(card);
     });
+
+    if(!sortable){
+      sortable = new Sortable(timelineEl, {
+        animation: 150,
+        handle: ".timeline-handle",
+        onEnd: (evt) => {
+          const oldIndex = evt.oldIndex;
+          const newIndex = evt.newIndex;
+          if(oldIndex == null || newIndex == null || oldIndex === newIndex) return;
+          const list = getSlides();
+          const [moved] = list.splice(oldIndex, 1);
+          list.splice(newIndex, 0, moved);
+          const currentIndex = getCurrentIndex();
+          let nextIndex = currentIndex;
+          if(currentIndex === oldIndex){
+            nextIndex = newIndex;
+          } else if(currentIndex > oldIndex && currentIndex <= newIndex){
+            nextIndex = currentIndex - 1;
+          } else if(currentIndex < oldIndex && currentIndex >= newIndex){
+            nextIndex = currentIndex + 1;
+          }
+          setCurrentIndex(nextIndex);
+          setSlides(list);
+          render();
+          updateNextAuto(list[nextIndex], nextIndex);
+          scheduleDraftSave?.();
+          markInteraction();
+        },
+      });
+    }
   }
 
   return {
