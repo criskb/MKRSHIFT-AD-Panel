@@ -6,6 +6,7 @@ import { PostFXManager } from "./postfx/PostFXManager.js";
 import { createTransitionMaterial } from "./postfx/TransitionPass.js";
 import { sampleCanvasToParticles } from "./sampling.js";
 import { makeTextCanvas, makeImageCanvas, makeVideoCanvas } from "./slideCanvas.js";
+import { LayerManager } from "./layers/LayerManager.js";
 import {
   attachAnimatedImage,
   attachAnimatedVideo,
@@ -394,6 +395,8 @@ export function initApp(){
 
   const scene = new THREE.Scene();
   const camera = new THREE.OrthographicCamera(-1,1,1,-1,-1000,1000);
+  const layerManager = new LayerManager({ scene });
+  scene.userData.layerManager = layerManager;
   const postFX = new PostFXManager(renderer, scene, camera);
   postFX.settings.bloom.strength = settings.bloomStrength;
   postFX.settings.afterimage.damp = settings.trailDamp;
