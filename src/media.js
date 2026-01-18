@@ -150,8 +150,13 @@ export function readFileAsDataURL(file){
   });
 }
 
+const IMAGE_EXTS = [".gif", ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".svg"];
+const VIDEO_EXTS = [".mp4", ".webm", ".mov", ".m4v"];
+
 export function isVideoFile(file){
-  return Boolean(file?.type && file.type.startsWith("video/"));
+  if(file?.type && file.type.startsWith("video/")) return true;
+  const name = (file?.name || "").toLowerCase();
+  return VIDEO_EXTS.some((ext) => name.endsWith(ext));
 }
 
 export function isGifFile(file){
@@ -165,7 +170,5 @@ export function isSupportedFile(file){
     return true;
   }
   const name = (file.name || "").toLowerCase();
-  const imageExts = [".gif", ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".svg"];
-  const videoExts = [".mp4", ".webm", ".mov", ".m4v"];
-  return imageExts.some((ext) => name.endsWith(ext)) || videoExts.some((ext) => name.endsWith(ext));
+  return IMAGE_EXTS.some((ext) => name.endsWith(ext)) || VIDEO_EXTS.some((ext) => name.endsWith(ext));
 }
