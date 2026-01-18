@@ -31,10 +31,12 @@ import {
 } from "./ui.js";
 import { createControls } from "./ui/controls.js";
 import { createPlaylist, touchPlaylist, DRAFT_STORAGE_KEY } from "./playlist.js";
+import { THEMES, normalizeTheme } from "./themes/theme-data.js";
 
 export function initApp(){
   const settings = loadSettings();
-  document.body.dataset.theme = settings.theme ?? "dark";
+  settings.theme = normalizeTheme(settings.theme);
+  document.body.dataset.theme = settings.theme;
 
   const el = (id) => document.getElementById(id);
   const panel = el("panel");
@@ -48,6 +50,17 @@ export function initApp(){
   const canvasDropZone = el("canvasDropZone");
   const btnSaveDraft = el("btnSaveDraft");
   const btnLoadDraft = el("btnLoadDraft");
+  const btnSettings = el("btnSettings");
+  const settingsModal = el("settingsModal");
+  const settingsClose = el("settingsClose");
+  const settingsAutoplay = el("settingsAutoplay");
+  const settingsInterval = el("settingsInterval");
+  const settingsTransition = el("settingsTransition");
+  const settingsRenderMode = el("settingsRenderMode");
+  const settingsPipeline = el("settingsPipeline");
+  const settingsThemeList = el("settingsThemeList");
+  const settingsTabs = document.querySelectorAll("[data-settings-tab]");
+  const settingsPanels = document.querySelectorAll("[data-settings-panel]");
 
   const toastEl = el("toast");
   let toastTimer = null;
@@ -82,6 +95,49 @@ export function initApp(){
   function saveSettingsAndDraft(nextSettings){
     saveSettings(nextSettings);
     scheduleDraftSave();
+  }
+
+  function setSettingsModalOpen(isOpen){
+    settingsModal?.classList.toggle("hidden", !isOpen);
+    settingsModal?.setAttribute("aria-hidden", String(!isOpen));
+  }
+
+  function setActiveSettingsTab(tabId){
+    settingsTabs.forEach((tab) => {
+      tab.classList.toggle("active", tab.dataset.settingsTab === tabId);
+    });
+    settingsPanels.forEach((panel) => {
+      panel.classList.toggle("active", panel.dataset.settingsPanel === tabId);
+    });
+  }
+
+  function renderThemeButtons(){
+    if(!settingsThemeList) return;
+    settingsThemeList.innerHTML = "";
+    THEMES.forEach((theme) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `theme-pill${theme.id === settings.theme ? " active" : ""}`;
+      const glyphs = theme.glyphs?.join(" ") ?? "";
+      btn.innerHTML = `<span class="theme-glyphs">${glyphs}</span><span>${theme.label}</span>`;
+      btn.addEventListener("click", () => {
+        settings.theme = normalizeTheme(theme.id);
+        document.body.dataset.theme = settings.theme;
+        saveSettingsAndDraft(settings);
+        renderThemeButtons();
+        refreshControls();
+      });
+      settingsThemeList.appendChild(btn);
+    });
+  }
+
+  function syncSettingsModal(){
+    if(settingsAutoplay) settingsAutoplay.value = settings.autoplay ? "1" : "0";
+    if(settingsInterval) settingsInterval.value = String(settings.interval ?? 8);
+    if(settingsTransition) settingsTransition.value = String(settings.transition ?? 2.2);
+    if(settingsRenderMode) settingsRenderMode.value = settings.renderMode ?? "particles";
+    if(settingsPipeline) settingsPipeline.value = settings.pipeline ?? "none";
+    renderThemeButtons();
   }
 
   let controls = null;
@@ -125,6 +181,54 @@ export function initApp(){
   btnHide.addEventListener("click", () => toggleUI());
   btnKiosk?.addEventListener("click", () => {
     void setKioskMode(!isKioskMode());
+  });
+  btnSettings?.addEventListener("click", () => {
+    syncSettingsModal();
+    setActiveSettingsTab("info");
+    setSettingsModalOpen(true);
+  });
+  settingsClose?.addEventListener("click", () => setSettingsModalOpen(false));
+  settingsModal?.addEventListener("click", (event) => {
+    if(event.target === settingsModal){
+      setSettingsModalOpen(false);
+    }
+  });
+  settingsTabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      setActiveSettingsTab(tab.dataset.settingsTab);
+    });
+  });
+  settingsAutoplay?.addEventListener("change", () => {
+    settings.autoplay = settingsAutoplay.value === "1";
+    if(ui.autoplay) ui.autoplay.value = settings.autoplay ? "1" : "0";
+    saveSettingsAndDraft(settings);
+  });
+  settingsInterval?.addEventListener("change", () => {
+    settings.interval = clamp(parseFloat(settingsInterval.value) || 8, 2, 60);
+    settingsInterval.value = String(settings.interval);
+    if(ui.interval) ui.interval.value = String(settings.interval);
+    saveSettingsAndDraft(settings);
+  });
+  settingsTransition?.addEventListener("change", () => {
+    settings.transition = clamp(parseFloat(settingsTransition.value) || 2.2, 0.6, 10);
+    settingsTransition.value = String(settings.transition);
+    if(ui.transition) ui.transition.value = String(settings.transition);
+    saveSettingsAndDraft(settings);
+  });
+  settingsRenderMode?.addEventListener("change", () => {
+    settings.renderMode = settingsRenderMode.value;
+    if(ui.renderMode) ui.renderMode.value = settings.renderMode;
+    updatePipelineVisibility(ui, settings);
+    saveSettingsAndDraft(settings);
+    syncPostFXRenderSource();
+  });
+  settingsPipeline?.addEventListener("change", () => {
+    settings.pipeline = settingsPipeline.value;
+    if(ui.pipeline) ui.pipeline.value = settings.pipeline;
+    postFX.setMode(settings.pipeline);
+    updatePipelineVisibility(ui, settings);
+    saveSettingsAndDraft(settings);
+    syncPostFXRenderSource();
   });
 
   const ui = {

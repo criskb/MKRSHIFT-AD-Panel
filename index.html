@@ -13,7 +13,7 @@
 
     <div id="hud" aria-hidden="true">
       <div class="title">MKRShift DotScreen</div>
-      <div class="hint">Drag images in • Press <b>H</b> hide UI • <b>F</b> fullscreen • <b>S</b> settings</div>
+      <div class="hint">Drag images in • Press <b>H</b> hide UI • <b>F</b> fullscreen • <b>S</b> settings panel • ⚙ Theme/Info</div>
     </div>
 
     <div id="panel" class="hidden">
@@ -458,6 +458,91 @@
 
       <div style="font-size:12px;color:var(--ui-tx-dim);line-height:1.35;margin-top:6px">
         Tip: use transparent PNGs (logos) for the cleanest “OpenAI ad” style. For kiosk mode, open with <b>?kiosk=1</b>.
+      </div>
+    </div>
+
+    <button class="btn settings-trigger" id="btnSettings" type="button">⚙ Settings</button>
+
+    <div id="settingsModal" class="settings-modal hidden" aria-hidden="true">
+      <div class="settings-card" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+        <div class="settings-header">
+          <div>
+            <div id="settingsTitle" class="settings-title">Settings</div>
+            <div class="settings-subtitle">Info, quick controls, and theme selection.</div>
+          </div>
+          <button class="btn tiny" id="settingsClose" type="button">Close</button>
+        </div>
+        <div class="settings-tabs">
+          <button class="settings-tab active" type="button" data-settings-tab="info">Info</button>
+          <button class="settings-tab" type="button" data-settings-tab="controls">Settings</button>
+          <button class="settings-tab" type="button" data-settings-tab="theme">Theme</button>
+        </div>
+        <div class="settings-body">
+          <section class="settings-panel active" data-settings-panel="info">
+            <div class="settings-block">
+              <div class="settings-heading">MKRShift DotScreen</div>
+              <p class="settings-text">Glassy kiosk UI for MKRShift ad screens, built for quick playback tuning and theme swaps.</p>
+            </div>
+            <div class="settings-block">
+              <div class="settings-heading">Shortcuts</div>
+              <ul class="settings-list">
+                <li><b>H</b> Toggle UI</li>
+                <li><b>F</b> Fullscreen</li>
+                <li><b>S</b> Settings panel</li>
+              </ul>
+            </div>
+          </section>
+          <section class="settings-panel" data-settings-panel="controls">
+            <div class="row">
+              <label for="settingsAutoplay">Autoplay</label>
+              <div class="ctl">
+                <select id="settingsAutoplay">
+                  <option value="1">On</option>
+                  <option value="0">Off</option>
+                </select>
+              </div>
+            </div>
+            <div class="row">
+              <label for="settingsInterval">Slide interval</label>
+              <div class="ctl">
+                <input id="settingsInterval" type="number" min="2" max="60" step="1" />
+              </div>
+            </div>
+            <div class="row">
+              <label for="settingsTransition">Transition</label>
+              <div class="ctl">
+                <input id="settingsTransition" type="number" min="0.6" max="10" step="0.1" />
+              </div>
+            </div>
+            <div class="row">
+              <label for="settingsRenderMode">Render mode</label>
+              <div class="ctl">
+                <select id="settingsRenderMode">
+                  <option value="particles">Particles</option>
+                  <option value="media">Media shader</option>
+                </select>
+              </div>
+            </div>
+            <div class="row">
+              <label for="settingsPipeline">Pipeline</label>
+              <div class="ctl">
+                <select id="settingsPipeline">
+                  <option value="none">None</option>
+                  <option value="clean">Clean</option>
+                  <option value="neon">Neon Bloom</option>
+                  <option value="afterimage">Afterimage Trails</option>
+                  <option value="halftone">Print Halftone</option>
+                  <option value="dotscreen">DotScreen</option>
+                  <option value="glitch">Glitch Accent</option>
+                  <option value="crt">CRT Light</option>
+                </select>
+              </div>
+            </div>
+          </section>
+          <section class="settings-panel" data-settings-panel="theme">
+            <div class="settings-theme-list" id="settingsThemeList"></div>
+          </section>
+        </div>
       </div>
     </div>
 
