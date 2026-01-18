@@ -14,7 +14,7 @@ A Vite + Three.js-powered digital signage tool for building animated ad panels w
 - Node.js 18+ (recommended)
 - npm
 
-### Installation
+### Setup
 ```bash
 npm install
 ```
@@ -30,10 +30,10 @@ npm run build
 ```
 
 ## Project Structure
-- `src/` — core application code
-- `src/postfx/` — post-processing pipeline utilities
-- `src/shaders.js` — shader definitions
-- `src/styles.css` — app styling
+- `src/` — core application code (scene setup, rendering, and UI logic).
+- `src/postfx/` — post-processing pipeline utilities (effects, compositing, and tuning).
+- `src/shaders.js` — shader definitions shared by the rendering pipeline.
+- `src/styles.css` — app styling.
 
 ## Roadmap
 See `Instructions.txt` for the current development roadmap and implementation notes.

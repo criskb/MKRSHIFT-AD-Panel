@@ -11,11 +11,16 @@ Thanks for considering contributing! This repo is currently focused on rapid ite
    ```bash
    npm run dev
    ```
+3. Build for production (optional sanity check):
+   ```bash
+   npm run build
+   ```
 
 ## Pull Request Guidelines
 - Keep PRs focused on a single topic where possible.
 - Include a brief summary and testing notes.
 - Update documentation (README/CHANGELOG) when adding new features or workflows.
+- Note any relevant screenshots or recordings for UI changes.
 
 ## Reporting Issues
 Please include:
