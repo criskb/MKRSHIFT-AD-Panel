@@ -427,23 +427,6 @@ export function initApp(){
     });
   }
 
-  renderer.domElement.addEventListener("pointerdown", (event) => {
-    if(isKioskMode()) return;
-    if(isTransforming) return;
-    if(event.button !== 0) return;
-    const rect = renderer.domElement.getBoundingClientRect();
-    pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-    raycaster.setFromCamera(pointer, camera);
-    const hits = raycaster.intersectObjects(layerManager.group.children, true);
-    if(hits.length){
-      const layer = findLayerFromObject(hits[0].object);
-      selectLayer(layer);
-    } else {
-      selectLayer(null);
-    }
-  });
-
   function isEditableTarget(target){
     if(!target) return false;
     const tag = target.tagName;
@@ -767,6 +750,23 @@ export function initApp(){
       scale: { x: object.scale.x, y: object.scale.y, z: object.scale.z },
     });
   }
+
+  renderer.domElement.addEventListener("pointerdown", (event) => {
+    if(isKioskMode()) return;
+    if(isTransforming) return;
+    if(event.button !== 0) return;
+    const rect = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+    const hits = raycaster.intersectObjects(layerManager.group.children, true);
+    if(hits.length){
+      const layer = findLayerFromObject(hits[0].object);
+      selectLayer(layer);
+    } else {
+      selectLayer(null);
+    }
+  });
 
   const material = new THREE.ShaderMaterial({
     vertexShader: VERT,

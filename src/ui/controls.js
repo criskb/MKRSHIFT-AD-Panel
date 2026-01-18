@@ -63,7 +63,7 @@ export function createControls({
 
   applyTheme(state.theme);
 
-  const themeBinding = pane.addBinding(state, "theme", {
+  const themeBinding = pane.addInput(state, "theme", {
     label: "Theme",
     options: {
       Dark: "dark",
@@ -85,19 +85,19 @@ export function createControls({
     playlistFolder?.dispose();
     playlistFolder = pane.addFolder({ title: "Playlist" });
 
-    playlistFolder.addBinding(state, "autoplay", { label: "Autoplay" }).on("change", (ev) => {
+    playlistFolder.addInput(state, "autoplay", { label: "Autoplay" }).on("change", (ev) => {
       settings.autoplay = ev.value;
       saveSettings(settings);
       markInteraction?.();
     });
 
-    playlistFolder.addBinding(state, "interval", { label: "Interval", min: 2, max: 60, step: 0.5 }).on("change", (ev) => {
+    playlistFolder.addInput(state, "interval", { label: "Interval", min: 2, max: 60, step: 0.5 }).on("change", (ev) => {
       settings.interval = ev.value;
       saveSettings(settings);
       markInteraction?.();
     });
 
-    playlistFolder.addBinding(state, "transition", { label: "Transition", min: 0.6, max: 10, step: 0.1 }).on("change", (ev) => {
+    playlistFolder.addInput(state, "transition", { label: "Transition", min: 0.6, max: 10, step: 0.1 }).on("change", (ev) => {
       settings.transition = ev.value;
       updateTransition?.(settings.transition);
       saveSettings(settings);
@@ -109,7 +109,7 @@ export function createControls({
     state.currentSlideId = slides[currentIndex]?.id ?? currentIndex;
     const options = buildSlideOptions(slides);
 
-    currentSlideBinding = playlistFolder.addBinding(state, "currentSlideId", {
+    currentSlideBinding = playlistFolder.addInput(state, "currentSlideId", {
       label: "Current",
       options,
     });
@@ -133,7 +133,7 @@ export function createControls({
   }
 
   const postFxFolder = pane.addFolder({ title: "PostFX" });
-  postFxFolder.addBinding(state, "renderMode", {
+  postFxFolder.addInput(state, "renderMode", {
     label: "Render",
     options: {
       Particles: "particles",
@@ -147,7 +147,7 @@ export function createControls({
     markInteraction?.();
   });
 
-  postFxFolder.addBinding(state, "pipeline", {
+  postFxFolder.addInput(state, "pipeline", {
     label: "Pipeline",
     options: {
       None: "none",
@@ -167,7 +167,7 @@ export function createControls({
     markInteraction?.();
   });
 
-  postFxFolder.addBinding(state, "bloomStrength", { label: "Bloom", min: 0, max: 2, step: 0.01 }).on("change", (ev) => {
+  postFxFolder.addInput(state, "bloomStrength", { label: "Bloom", min: 0, max: 2, step: 0.01 }).on("change", (ev) => {
     settings.bloomStrength = ev.value;
     if(postFX?.settings?.bloom){
       postFX.settings.bloom.strength = settings.bloomStrength;
@@ -176,7 +176,7 @@ export function createControls({
     markInteraction?.();
   });
 
-  postFxFolder.addBinding(state, "trailDamp", { label: "Trails", min: 0.5, max: 0.99, step: 0.01 }).on("change", (ev) => {
+  postFxFolder.addInput(state, "trailDamp", { label: "Trails", min: 0.5, max: 0.99, step: 0.01 }).on("change", (ev) => {
     settings.trailDamp = ev.value;
     if(postFX?.settings?.afterimage){
       postFX.settings.afterimage.damp = settings.trailDamp;
@@ -185,7 +185,7 @@ export function createControls({
     markInteraction?.();
   });
 
-  postFxFolder.addBinding(state, "grain", { label: "Grain", min: 0, max: 0.5, step: 0.01 }).on("change", (ev) => {
+  postFxFolder.addInput(state, "grain", { label: "Grain", min: 0, max: 0.5, step: 0.01 }).on("change", (ev) => {
     settings.grain = ev.value;
     applyToneSettings?.(settings);
     refreshSlide?.(true);
@@ -193,7 +193,7 @@ export function createControls({
     markInteraction?.();
   });
 
-  postFxFolder.addBinding(state, "vignette", { label: "Vignette", min: 0, max: 0.8, step: 0.01 }).on("change", (ev) => {
+  postFxFolder.addInput(state, "vignette", { label: "Vignette", min: 0, max: 0.8, step: 0.01 }).on("change", (ev) => {
     settings.vignette = ev.value;
     applyToneSettings?.(settings);
     refreshSlide?.(true);
@@ -201,7 +201,7 @@ export function createControls({
     markInteraction?.();
   });
 
-  postFxFolder.addBinding(state, "sharpen", { label: "Sharpen", min: 0, max: 1, step: 0.01 }).on("change", (ev) => {
+  postFxFolder.addInput(state, "sharpen", { label: "Sharpen", min: 0, max: 1, step: 0.01 }).on("change", (ev) => {
     settings.sharpen = ev.value;
     applyToneSettings?.(settings);
     refreshSlide?.(true);
@@ -209,14 +209,14 @@ export function createControls({
     markInteraction?.();
   });
 
-  postFxFolder.addBinding(state, "chromSplit", { label: "RGB Split", min: 0, max: 0.01, step: 0.0005 }).on("change", (ev) => {
+  postFxFolder.addInput(state, "chromSplit", { label: "RGB Split", min: 0, max: 0.01, step: 0.0005 }).on("change", (ev) => {
     settings.chromSplit = ev.value;
     updateChromSplit?.(settings.chromSplit);
     saveSettings(settings);
     markInteraction?.();
   });
 
-  postFxFolder.addBinding(state, "transitionSoftness", { label: "Transition Soft", min: 0, max: 0.6, step: 0.01 }).on("change", (ev) => {
+  postFxFolder.addInput(state, "transitionSoftness", { label: "Transition Soft", min: 0, max: 0.6, step: 0.01 }).on("change", (ev) => {
     settings.transitionSoftness = ev.value;
     updateTransitionSoftness?.(settings.transitionSoftness);
     saveSettings(settings);
@@ -229,21 +229,21 @@ export function createControls({
     layersFolder = pane.addFolder({ title: "Layers" });
 
     if(!layerManager){
-      layersFolder.addBinding({ status: "No manager" }, "status", { label: "Status", readonly: true });
+      layersFolder.addInput({ status: "No manager" }, "status", { label: "Status", readonly: true });
       return;
     }
 
     const groupState = {
       visible: layerManager.group?.visible ?? true,
     };
-    layersFolder.addBinding(groupState, "visible", { label: "Group" }).on("change", (ev) => {
+    layersFolder.addInput(groupState, "visible", { label: "Group" }).on("change", (ev) => {
       layerManager.group.visible = ev.value;
       markInteraction?.();
     });
 
     const layers = layerManager.layers ?? [];
     if(layers.length === 0){
-      layersFolder.addBinding({ status: "No layers" }, "status", { label: "Status", readonly: true });
+      layersFolder.addInput({ status: "No layers" }, "status", { label: "Status", readonly: true });
       return;
     }
 
@@ -255,11 +255,11 @@ export function createControls({
         opacity: layer.opacity ?? 1,
       };
 
-      layerFolder.addBinding(layerState, "visible", { label: "Visible" }).on("change", (ev) => {
+      layerFolder.addInput(layerState, "visible", { label: "Visible" }).on("change", (ev) => {
         layerManager.updateLayer?.(layer.id, { visible: ev.value });
         markInteraction?.();
       });
-      layerFolder.addBinding(layerState, "opacity", { label: "Opacity", min: 0, max: 1, step: 0.01 }).on("change", (ev) => {
+      layerFolder.addInput(layerState, "opacity", { label: "Opacity", min: 0, max: 1, step: 0.01 }).on("change", (ev) => {
         layerManager.updateLayer?.(layer.id, { opacity: ev.value });
         markInteraction?.();
       });
