@@ -2099,7 +2099,6 @@ export function initApp(){
   let fpsLastSample = performance.now();
   let currentFps = 0;
   let lowFpsMode = false;
-  let lowFpsRestore = null;
 
   function updateFpsUI(value){
     if(!ui.fpsReadout) return;
@@ -2109,31 +2108,22 @@ export function initApp(){
   function setLowFpsMode(enable){
     if(enable === lowFpsMode) return;
     if(enable){
-      lowFpsRestore = {
-        preset: settings.preset,
-        pipeline: settings.pipeline,
-        bloomStrength: settings.bloomStrength,
-        trailDamp: settings.trailDamp,
-        grain: settings.grain,
-        vignette: settings.vignette,
-        sharpen: settings.sharpen,
-        chromSplit: settings.chromSplit,
-      };
-      settings.preset = "Custom";
-      settings.pipeline = "clean";
-      settings.bloomStrength = 0;
-      settings.trailDamp = Math.min(settings.trailDamp, 0.85);
-      settings.grain = 0;
-      settings.vignette = 0;
-      settings.sharpen = 0;
-      settings.chromSplit = 0;
-    } else if(lowFpsRestore){
-      Object.assign(settings, lowFpsRestore);
-      lowFpsRestore = null;
+      postFX.setMode("clean");
+      postFX.settings.bloom.strength = 0;
+      postFX.settings.afterimage.damp = Math.min(settings.trailDamp, 0.85);
+      applyToneSettings(settings);
+      mediaMaterial.uniforms.uGrain.value = 0;
+      mediaMaterial.uniforms.uVignette.value = 0;
+      mediaMaterial.uniforms.uSharpen.value = 0;
+      mediaMaterial.uniforms.uChromAb.value = 0;
+      transitionMat.uniforms.rgbSplit.value = 0;
+    } else {
+      postFX.setMode(settings.pipeline);
+      postFX.settings.bloom.strength = settings.bloomStrength;
+      postFX.settings.afterimage.damp = settings.trailDamp;
+      applyToneSettings(settings);
+      transitionMat.uniforms.rgbSplit.value = settings.chromSplit;
     }
-    postFX.settings.bloom.strength = settings.bloomStrength;
-    postFX.settings.afterimage.damp = settings.trailDamp;
-    postFX.setMode(settings.pipeline);
     postFX.enabled = !document.hidden && postFX.mode !== "none";
     syncPostFXRenderSource();
     transitionMat.uniforms.rgbSplit.value = settings.chromSplit;
@@ -2143,6 +2133,9 @@ export function initApp(){
     updateMotionVisibility(ui, settings);
     updatePipelineVisibility(ui, settings);
     lowFpsMode = enable;
+    if(ui.fpsMode){
+      ui.fpsMode.textContent = enable ? "Low" : "Normal";
+    }
   }
 
   function tick(){

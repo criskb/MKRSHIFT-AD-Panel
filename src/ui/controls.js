@@ -34,10 +34,13 @@ export function createControls({
   updateChromSplit,
   markInteraction,
 }){
-  const container = document.createElement("div");
-  container.id = "controlDock";
-  container.className = "glass-panel";
-  document.body.appendChild(container);
+  let container = document.getElementById("controlDock");
+  if(!container){
+    container = document.createElement("div");
+    container.id = "controlDock";
+    container.className = "glass-panel";
+    document.body.appendChild(container);
+  }
 
   const pane = new Pane({ container, title: "Quick Controls", expanded: false });
   pane.element.classList.add("tp-dotscreen");
@@ -235,7 +238,8 @@ export function createControls({
       markInteraction?.();
     });
 
-    const layers = layerManager.layers ?? [];
+    const activeLayers = layerManager.getLayersForSlide?.(layerManager.activeSlideId);
+    const layers = activeLayers ?? layerManager.layers ?? [];
     if(layers.length === 0){
       layersFolder.addInput({ status: "No layers" }, "status", { label: "Status", readonly: true });
       return;
