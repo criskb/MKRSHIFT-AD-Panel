@@ -1,4 +1,5 @@
 import { Pane } from "tweakpane";
+import { THEME_OPTIONS, normalizeTheme } from "../themes/theme-data.js";
 
 function buildSlideOptions(slides){
   const options = {};
@@ -8,10 +9,6 @@ function buildSlideOptions(slides){
     options[label] = slide.id ?? index;
   });
   return options;
-}
-
-function normalizeTheme(value){
-  return value === "light" ? "light" : "dark";
 }
 
 function applyTheme(theme){
@@ -65,10 +62,7 @@ export function createControls({
 
   const themeBinding = pane.addInput(state, "theme", {
     label: "Theme",
-    options: {
-      Dark: "dark",
-      Light: "light",
-    },
+    options: THEME_OPTIONS,
   });
   themeBinding.on("change", (ev) => {
     settings.theme = normalizeTheme(ev.value);
