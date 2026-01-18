@@ -29,7 +29,6 @@ import {
   updateMotionVisibility,
   updatePipelineVisibility,
 } from "./ui.js";
-import { createControls } from "./ui/controls.js";
 import { createPlaylist, touchPlaylist, DRAFT_STORAGE_KEY } from "./playlist.js";
 import { THEMES, normalizeTheme } from "./themes/theme-data.js";
 
@@ -125,7 +124,6 @@ export function initApp(){
         document.body.dataset.theme = settings.theme;
         saveSettingsAndDraft(settings);
         renderThemeButtons();
-        refreshControls();
       });
       settingsThemeList.appendChild(btn);
     });
@@ -139,9 +137,6 @@ export function initApp(){
     if(settingsPipeline) settingsPipeline.value = settings.pipeline ?? "none";
     renderThemeButtons();
   }
-
-  let controls = null;
-  const refreshControls = () => controls?.refresh();
 
   function applyPreset(presetName){
     const preset = PRESETS[presetName];
@@ -166,7 +161,6 @@ export function initApp(){
     }
     saveSettingsAndDraft(settings);
     syncUIFromSettings(ui, settings);
-    refreshControls();
     postFX.settings.bloom.strength = settings.bloomStrength;
     postFX.settings.afterimage.damp = settings.trailDamp;
     postFX.setMode(settings.pipeline);
@@ -311,6 +305,15 @@ export function initApp(){
     motionControls: el("motionControls"),
     halftoneControls: el("halftoneControls"),
     fpsReadout: el("fpsReadout"),
+    layerInspector: el("layerInspector"),
+    layerInspectorName: el("layerInspectorName"),
+    layerInspectorType: el("layerInspectorType"),
+    layerName: el("layerName"),
+    layerVisible: el("layerVisible"),
+    layerOpacity: el("layerOpacity"),
+    layerOpacityVal: el("layerOpacityVal"),
+    layerText: el("layerText"),
+    layerTextRow: el("layerTextRow"),
   };
 
   const SLIDE_OVERRIDE_KEYS = [
@@ -421,7 +424,6 @@ export function initApp(){
     Object.assign(settings, DEFAULTS);
     saveSettingsAndDraft(settings);
     syncUIFromSettings(ui, settings);
-    refreshControls();
     updateHalftoneVisibility(ui, settings);
     updateMotionVisibility(ui, settings);
     updatePipelineVisibility(ui, settings);
@@ -472,13 +474,21 @@ export function initApp(){
     };
     switch(type){
       case "text":
-        return { type, text: "Edit Me", size: 48, color: "#ffffff", position: snapped };
+        return { type, text: "Edit Me", size: 48, color: "#ffffff", position: snapped, renderOnTop: true };
+      case "caption":
+        return { type: "text", text: "Caption", size: 28, color: "#ffffff", position: snapped, renderOnTop: true };
       case "shape":
-        return { type, width: 180, height: 120, color: "#00ffb3", position: snapped };
+        return { type, width: 180, height: 120, color: "#00ffb3", position: snapped, renderOnTop: true };
+      case "circle":
+        return { type: "shape", shape: "circle", radius: 70, segments: 48, color: "#00ffb3", position: snapped, renderOnTop: true };
+      case "banner":
+        return { type: "shape", width: 360, height: 80, color: "#2b2b2b", position: snapped, renderOnTop: true };
       case "image":
-        return { type, width: 240, height: 160, color: "#ffffff", position: snapped };
+        return { type, width: 240, height: 160, color: "#ffffff", position: snapped, renderOnTop: true };
       case "overlay":
-        return { type, width: 260, height: 160, color: "#111111", opacity: 0.4, position: snapped };
+        return { type, width: 260, height: 160, color: "#111111", opacity: 0.4, position: snapped, renderOnTop: true };
+      case "tint":
+        return { type: "overlay", width: 320, height: 200, color: "#000000", opacity: 0.25, position: snapped, renderOnTop: true };
       case "background":
         return {
           type,
@@ -486,6 +496,7 @@ export function initApp(){
           height: window.innerHeight,
           color: "#050505",
           position: { x: 0, y: 0, z: -1 },
+          renderOnTop: false,
         };
       default:
         return null;
@@ -495,9 +506,14 @@ export function initApp(){
   async function addLayerFromDrop(type, position){
     const layer = buildLayerTemplate(type, position);
     if(!layer) return;
+    const activeSlide = slides[currentSlideIndex];
+    if(activeSlide?.id){
+      layer.slideId = activeSlide.id;
+    }
     try{
       const created = await layerManager.addLayer(layer);
       selectLayer(created);
+      timeline.render();
     }catch(err){
       console.error("Failed to add layer", err);
       toast("Could not add layer");
@@ -554,6 +570,7 @@ export function initApp(){
     if(e.key === "h" || e.key === "H") toggleUI();
     if(e.key === "s" || e.key === "S") setPanelVisible(panel.classList.contains("hidden"));
     if(e.key === "f" || e.key === "F") toggleFullscreen();
+    if(e.key === "g" || e.key === "G" || e.key === "w" || e.key === "W") transformControls.setMode("translate");
     if(e.key === "r" || e.key === "R") transformControls.setMode("rotate");
     if(e.key === "e" || e.key === "E") transformControls.setMode("scale");
     if(e.key === "ArrowUp"){
@@ -739,7 +756,7 @@ export function initApp(){
   postFX.setMode(settings.pipeline);
 
   const transformControls = new TransformControls(camera, renderer.domElement);
-  transformControls.setMode("scale");
+  transformControls.setMode("translate");
   transformControls.setTranslationSnap(GRID_SIZE);
   transformControls.setRotationSnap(THREE.MathUtils.degToRad(15));
   transformControls.setScaleSnap(0.1);
@@ -834,6 +851,47 @@ export function initApp(){
     return null;
   }
 
+  function updateLayerInspector(layer){
+    if(!ui.layerInspector) return;
+    const hasLayer = Boolean(layer);
+    ui.layerInspector.classList.toggle("is-disabled", !hasLayer);
+    if(ui.layerInspectorName){
+      ui.layerInspectorName.textContent = hasLayer ? (layer.name || layer.type || "Layer") : "None";
+    }
+    if(ui.layerInspectorType){
+      ui.layerInspectorType.textContent = hasLayer ? String(layer.type || "").toUpperCase() : "—";
+    }
+    if(ui.layerName){
+      ui.layerName.value = hasLayer ? (layer.name ?? "") : "";
+    }
+    if(ui.layerVisible){
+      ui.layerVisible.value = layer?.visible === false ? "0" : "1";
+    }
+    if(ui.layerOpacity){
+      const opacity = layer?.opacity ?? 1;
+      ui.layerOpacity.value = String(opacity);
+      if(ui.layerOpacityVal){
+        const formatted = opacity.toFixed(2).replace(/\.00$/, "");
+        ui.layerOpacityVal.textContent = formatted;
+      }
+    }
+    if(ui.layerTextRow){
+      const showText = layer?.type === "text";
+      ui.layerTextRow.style.display = showText ? "" : "none";
+      if(ui.layerText){
+        ui.layerText.value = showText ? (layer.text ?? "") : "";
+      }
+    }
+  }
+
+  function ensureSelectionForActiveSlide(){
+    if(selectedLayer && !layerManager.isLayerInActiveSlide(selectedLayer)){
+      selectLayer(null);
+      return;
+    }
+    updateLayerInspector(selectedLayer);
+  }
+
   function selectLayer(layer){
     selectedLayer = layer;
     if(layer?.object3d){
@@ -843,6 +901,8 @@ export function initApp(){
       transformControls.detach();
       transformControls.visible = false;
     }
+    timeline?.render?.();
+    updateLayerInspector(layer);
   }
 
   function syncLayerTransform(layer){
@@ -1035,10 +1095,47 @@ export function initApp(){
   bindRange(ui.oscSpeed, ui.oscSpeedVal, settings, "oscSpeed", saveSettingsAndDraft, ()=> applyRenderSettings(getEffectiveSettings(currentSlide)), markInteraction);
 
   syncUIFromSettings(ui, settings);
-  refreshControls();
   updateHalftoneVisibility(ui, settings);
   updateMotionVisibility(ui, settings);
   updatePipelineVisibility(ui, settings);
+  updateLayerInspector(null);
+
+  ui.layerName?.addEventListener("input", () => {
+    if(!selectedLayer) return;
+    void layerManager.updateLayer(selectedLayer.id, { name: ui.layerName.value });
+    timeline.render();
+    scheduleDraftSave();
+    markInteraction();
+    updateLayerInspector(selectedLayer);
+  });
+
+  ui.layerVisible?.addEventListener("change", () => {
+    if(!selectedLayer) return;
+    const visible = ui.layerVisible.value === "1";
+    void layerManager.updateLayer(selectedLayer.id, { visible });
+    scheduleDraftSave();
+    markInteraction();
+    updateLayerInspector(selectedLayer);
+  });
+
+  ui.layerOpacity?.addEventListener("input", () => {
+    if(!selectedLayer) return;
+    const opacity = clamp(parseFloat(ui.layerOpacity.value), 0, 1);
+    ui.layerOpacity.value = String(opacity);
+    if(ui.layerOpacityVal){
+      ui.layerOpacityVal.textContent = opacity.toFixed(2).replace(/\.00$/, "");
+    }
+    void layerManager.updateLayer(selectedLayer.id, { opacity });
+    scheduleDraftSave();
+    markInteraction();
+  });
+
+  ui.layerText?.addEventListener("input", () => {
+    if(!selectedLayer || selectedLayer.type !== "text") return;
+    void layerManager.updateLayer(selectedLayer.id, { text: ui.layerText.value });
+    scheduleDraftSave();
+    markInteraction();
+  });
 
   ui.gridSize.addEventListener("input", ()=>{
     settings.gridSize = clamp(parseInt(ui.gridSize.value || "16", 10), 2, 200);
@@ -1255,39 +1352,13 @@ export function initApp(){
       }
     },
     scheduleDraftSave,
+    getLayersForSlide: (slide) => layerManager.getLayersForSlide?.(slide.id) ?? [],
+    selectLayer: (layer) => {
+      selectLayer(layer);
+      markInteraction();
+    },
+    getSelectedLayerId: () => selectedLayer?.id ?? null,
   });
-
-  controls = createControls({
-    settings,
-    saveSettings: saveSettingsAndDraft,
-    postFX,
-    layerManager,
-    getSlides: () => slides,
-    getCurrentIndex: () => currentSlideIndex,
-    setCurrentSlide,
-    nextSlide,
-    prevSlide,
-    updateRenderMode,
-    updatePipelineVisibility: () => updatePipelineVisibility(ui, settings),
-    applyToneSettings,
-    refreshSlide,
-    updateTransition: (value) => {
-      transitionDuration = value;
-    },
-    updateTransitionSoftness: (value) => {
-      transitionMat.uniforms.softness.value = value;
-    },
-    updateChromSplit: (value) => {
-      transitionMat.uniforms.rgbSplit.value = value;
-    },
-    markInteraction,
-  });
-
-  const baseTimelineRender = timeline.render;
-  timeline.render = () => {
-    baseTimelineRender();
-    controls?.refreshPlaylist();
-  };
 
   function rebuildParticles(){
     if(points){
@@ -1584,6 +1655,8 @@ export function initApp(){
     applyToneSettings(activeSettings);
     setMediaSourceForSlide(slide);
     currentSlide = slide;
+    layerManager.setActiveSlideId(slide?.id);
+    ensureSelectionForActiveSlide();
     currentImgAspect = getSlideAspect(slide);
     updateMediaScale();
   }
@@ -1656,6 +1729,8 @@ export function initApp(){
       sample = sampleCanvasToParticles(fallbackCanvas, activeSettings);
     }
     currentSlide = slide;
+    layerManager.setActiveSlideId(slide?.id);
+    ensureSelectionForActiveSlide();
     currentImgAspect = sample.imgAspect;
     updateScaleUniform();
 
@@ -1701,6 +1776,8 @@ export function initApp(){
       sample = sampleCanvasToParticles(fallbackCanvas, activeSettings);
     }
     currentSlide = slide;
+    layerManager.setActiveSlideId(slide?.id);
+    ensureSelectionForActiveSlide();
     currentImgAspect = sample.imgAspect;
     updateScaleUniform();
     if(slide.lockColor && slide.hasColorSampled){
@@ -1828,7 +1905,6 @@ export function initApp(){
       Object.assign(settings, DEFAULTS, data.settings);
       saveSettingsAndDraft(settings);
       syncUIFromSettings(ui, settings);
-      refreshControls();
       updateHalftoneVisibility(ui, settings);
       updateMotionVisibility(ui, settings);
       updatePipelineVisibility(ui, settings);
@@ -2066,7 +2142,6 @@ export function initApp(){
     updateHalftoneVisibility(ui, settings);
     updateMotionVisibility(ui, settings);
     updatePipelineVisibility(ui, settings);
-    refreshControls();
     lowFpsMode = enable;
   }
 

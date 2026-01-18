@@ -19,13 +19,54 @@
     <div id="panel" class="hidden">
       <div class="row" style="margin-top:0">
         <div>
-          <div style="font-weight:800;letter-spacing:.2px">DotScreen Controls</div>
+          <div style="font-weight:800;letter-spacing:.2px">Controls</div>
           <div style="font-size:12px;color:var(--ui-tx-dim);margin-top:3px">Made for MKRShift ad screens (kiosk friendly).</div>
         </div>
         <button class="btn" id="btnClose">Close</button>
       </div>
 
       <div id="dropzone">Drop images/videos here (PNG/JPG/WebP/GIF/MP4/WebM) or use “Add Media”</div>
+
+      <div class="divider"></div>
+
+      <div class="section-title">Selected Layer</div>
+      <div id="layerInspector" class="layer-inspector is-disabled">
+        <div class="row">
+          <label>Layer</label>
+          <div class="ctl">
+            <span id="layerInspectorName">None</span>
+            <span id="layerInspectorType" class="layer-inspector-type">—</span>
+          </div>
+        </div>
+        <div class="row">
+          <label>Name</label>
+          <div class="ctl">
+            <input id="layerName" type="text" placeholder="Layer name" />
+          </div>
+        </div>
+        <div class="row">
+          <label>Visible</label>
+          <div class="ctl">
+            <select id="layerVisible">
+              <option value="1">On</option>
+              <option value="0">Off</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <label>Opacity</label>
+          <div class="ctl">
+            <input id="layerOpacity" type="range" min="0" max="1" step="0.01" value="1" />
+            <span id="layerOpacityVal" style="width:44px;text-align:right;font-variant-numeric:tabular-nums">1</span>
+          </div>
+        </div>
+        <div class="row" id="layerTextRow">
+          <label>Text</label>
+          <div class="ctl">
+            <input id="layerText" type="text" placeholder="Edit text layer" />
+          </div>
+        </div>
+      </div>
 
       <div class="divider"></div>
 
@@ -556,9 +597,13 @@
       </div>
       <div id="drawerList" class="drawer-list">
         <button class="drawer-item" type="button" data-layer="text">Text Block</button>
+        <button class="drawer-item" type="button" data-layer="caption">Caption</button>
         <button class="drawer-item" type="button" data-layer="shape">Shape</button>
+        <button class="drawer-item" type="button" data-layer="circle">Circle</button>
+        <button class="drawer-item" type="button" data-layer="banner">Banner</button>
         <button class="drawer-item" type="button" data-layer="image">Image</button>
         <button class="drawer-item" type="button" data-layer="overlay">Overlay</button>
+        <button class="drawer-item" type="button" data-layer="tint">Tint Overlay</button>
         <button class="drawer-item" type="button" data-layer="background">Background</button>
       </div>
     </aside>

@@ -378,6 +378,53 @@ body[data-theme="light"] .timeline-card{
   display:grid;
   gap:8px;
 }
+.layer-inspector{
+  display:grid;
+  gap:8px;
+  padding:8px;
+  background:rgba(0,0,0,.18);
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,.08);
+}
+.layer-inspector.is-disabled{
+  opacity:.6;
+  pointer-events:none;
+}
+.layer-inspector-type{
+  margin-left:8px;
+  font-size:11px;
+  color:var(--ui-tx-dim);
+}
+.timeline-layer-stack{
+  margin-top:8px;
+  display:grid;
+  gap:6px;
+}
+.timeline-layer-title{
+  font-size:11px;
+  color:var(--ui-tx-dim);
+  text-transform:uppercase;
+  letter-spacing:.08em;
+}
+.timeline-layer-list{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+.timeline-layer-btn{
+  border-radius:999px;
+  padding:4px 8px;
+  font-size:11px;
+}
+.timeline-layer-btn.active{
+  border-color:rgba(0,255,179,.7);
+  color:var(--ui-tx);
+  box-shadow:0 0 0 1px rgba(0,255,179,.35) inset;
+}
+.timeline-layer-empty{
+  font-size:11px;
+  color:var(--ui-tx-dim);
+}
 .timeline-settings .row{
   margin:0;
 }
@@ -406,14 +453,6 @@ body[data-theme="light"] .timeline-settings details{
 }
 .timeline-settings details[open] summary::after{transform:rotate(180deg);}
 
-#controlDock{
-  position:fixed;
-  left:12px;
-  top:84px;
-  z-index:32;
-  width:min(320px, calc(100vw - 24px));
-  pointer-events:auto;
-}
 .glass-panel{
   background:var(--glass-bg);
   border:1px solid var(--glass-bd);
@@ -422,35 +461,10 @@ body[data-theme="light"] .timeline-settings details{
   backdrop-filter: blur(var(--glass-blur)) saturate(140%);
 }
 
-#controlDock .tp-dotscreen{
-  color:var(--ui-tx);
-}
-#controlDock .tp-dfwv{
-  background:transparent;
-}
-#controlDock .tp-lblv{
-  color:var(--ui-tx-dim);
-}
-#controlDock .tp-btnv{
-  background:rgba(255,255,255,.08);
-  border:1px solid rgba(255,255,255,.14);
-  color:var(--ui-tx);
-}
-#controlDock .tp-btnv:hover{
-  background:rgba(255,255,255,.16);
-}
-
 @media (max-width: 900px){
   #panel{
     left:12px;
     right:12px;
-    width:auto;
-  }
-  #controlDock{
-    left:12px;
-    right:12px;
-    top:auto;
-    bottom:108px;
     width:auto;
   }
   #timelineDock{
@@ -469,11 +483,6 @@ body[data-theme="light"] .timeline-settings details{
     top:8px;
     max-height:calc(100vh - 16px);
   }
-  #controlDock{
-    left:8px;
-    right:8px;
-    bottom:8px;
-  }
   #timelineDock{
     left:8px;
     right:8px;
@@ -485,11 +494,9 @@ body[data-theme="light"] .timeline-settings details{
 body.kiosk #panel,
 body.kiosk #hud,
 body.kiosk #timelineDock,
-body.kiosk #controlDock,
 body.ui-hidden #panel,
 body.ui-hidden #hud,
-body.ui-hidden #timelineDock,
-body.ui-hidden #controlDock{display:none;}
+body.ui-hidden #timelineDock{display:none;}
 body.kiosk #drawer,
 body.ui-hidden #drawer{display:none;}
 body.kiosk #app,
