@@ -42,6 +42,7 @@ export function initApp(){
   const btnClose = el("btnClose");
   const btnFullscreen = el("btnFullscreen");
   const btnHide = el("btnHide");
+  const btnKiosk = el("btnKiosk");
   const dz = el("dropzone");
   const drawerList = el("drawerList");
   const canvasDropZone = el("canvasDropZone");
@@ -122,6 +123,9 @@ export function initApp(){
   btnClose.addEventListener("click", () => setPanelVisible(false));
   btnFullscreen.addEventListener("click", () => toggleFullscreen());
   btnHide.addEventListener("click", () => toggleUI());
+  btnKiosk?.addEventListener("click", () => {
+    void setKioskMode(!isKioskMode());
+  });
 
   const ui = {
     autoplay: el("autoplay"),
@@ -423,6 +427,7 @@ export function initApp(){
   }
 
   renderer.domElement.addEventListener("pointerdown", (event) => {
+    if(isKioskMode()) return;
     if(isTransforming) return;
     if(event.button !== 0) return;
     const rect = renderer.domElement.getBoundingClientRect();
@@ -456,6 +461,7 @@ export function initApp(){
 
   // Hotkeys
   window.addEventListener("keydown", (e)=>{
+    if(isKioskMode()) return;
     if(isEditableTarget(document.activeElement)) return;
     if(e.key === "h" || e.key === "H") toggleUI();
     if(e.key === "s" || e.key === "S") setPanelVisible(panel.classList.contains("hidden"));
@@ -480,7 +486,10 @@ export function initApp(){
 
   // Auto-hide panel after inactivity
   let lastInteraction = performance.now();
-  function markInteraction(){ lastInteraction = performance.now(); }
+  function markInteraction(){
+    lastInteraction = performance.now();
+    if(kioskState.active) kioskState.idleResetDone = false;
+  }
   window.addEventListener("pointerdown", markInteraction, {passive:true});
   window.addEventListener("pointermove", markInteraction, {passive:true});
   window.addEventListener("pointermove", (event) => {
@@ -488,25 +497,88 @@ export function initApp(){
   }, { passive: true });
 
   function maybeAutoHideUI(){
-    if(document.body.classList.contains("kiosk")) return;
+    if(isKioskMode()) return;
     const idleMs = performance.now() - lastInteraction;
     if(!panel.classList.contains("hidden") && idleMs > 14000) setPanelVisible(false);
   }
 
   function toggleUI(){
-    const kiosk = document.body.classList.toggle("kiosk");
-    if(!kiosk) setPanelVisible(true);
+    const hidden = document.body.classList.toggle("ui-hidden");
+    if(!hidden) setPanelVisible(true);
     else setPanelVisible(false);
   }
 
-  async function toggleFullscreen(){
+  function isKioskMode(){
+    return document.body.classList.contains("kiosk");
+  }
+
+  async function setFullscreen(enabled){
     try{
-      if(!document.fullscreenElement) await document.documentElement.requestFullscreen();
-      else await document.exitFullscreen();
+      if(enabled && !document.fullscreenElement){
+        await document.documentElement.requestFullscreen();
+      } else if(!enabled && document.fullscreenElement){
+        await document.exitFullscreen();
+      }
     } catch(err){
       console.warn("Fullscreen failed", err);
     }
   }
+
+  async function toggleFullscreen(){
+    try{
+      await setFullscreen(!document.fullscreenElement);
+    } catch(err){
+      console.warn("Fullscreen failed", err);
+    }
+  }
+
+  const kioskState = {
+    active: false,
+    prevAutoplay: settings.autoplay,
+    prevPanelVisible: !panel.classList.contains("hidden"),
+    idleResetDone: false,
+  };
+  const KIOSK_IDLE_RESET_MS = 60000;
+
+  function updateKioskButton(){
+    if(!btnKiosk) return;
+    btnKiosk.textContent = isKioskMode() ? "Exit Kiosk" : "Enter Kiosk";
+  }
+
+  async function setKioskMode(enabled, { skipFullscreen = false } = {}){
+    if(enabled === kioskState.active) return;
+    kioskState.active = enabled;
+    if(enabled){
+      kioskState.prevAutoplay = settings.autoplay;
+      kioskState.prevPanelVisible = !panel.classList.contains("hidden");
+      kioskState.idleResetDone = false;
+      document.body.classList.add("kiosk");
+      document.body.classList.remove("ui-hidden");
+      setPanelVisible(false);
+      settings.autoplay = true;
+      if(ui.autoplay) ui.autoplay.value = "1";
+      saveSettingsAndDraft(settings);
+      if(typeof setCurrentSlide === "function" && slides?.length){
+        setCurrentSlide(0, true);
+      }
+      markInteraction();
+      if(!skipFullscreen) await setFullscreen(true);
+    } else {
+      document.body.classList.remove("kiosk");
+      if(kioskState.prevPanelVisible) setPanelVisible(true);
+      settings.autoplay = kioskState.prevAutoplay;
+      if(ui.autoplay) ui.autoplay.value = settings.autoplay ? "1" : "0";
+      saveSettingsAndDraft(settings);
+      if(!skipFullscreen) await setFullscreen(false);
+    }
+    updateKioskButton();
+  }
+
+  document.addEventListener("fullscreenchange", () => {
+    if(!document.fullscreenElement && kioskState.active){
+      void setKioskMode(false, { skipFullscreen: true });
+    }
+  });
 
   function showTapToStartOverlay(onStart){
     return new Promise((resolve) => {
@@ -533,7 +605,7 @@ export function initApp(){
   }
 
   const params = new URLSearchParams(location.search);
-  if(params.get("kiosk") === "1") document.body.classList.add("kiosk");
+  const shouldStartKiosk = params.get("kiosk") === "1";
 
   const container = document.getElementById("app");
   const renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:"high-performance" });
@@ -1866,6 +1938,15 @@ export function initApp(){
     if(settings.autoplay && t >= nextAuto){
       nextSlide();
     }
+    if(kioskState.active){
+      const idleMs = performance.now() - lastInteraction;
+      if(!kioskState.idleResetDone && idleMs > KIOSK_IDLE_RESET_MS){
+        kioskState.idleResetDone = true;
+        if(slides.length){
+          setCurrentSlide(0, true);
+        }
+      }
+    }
 
     if(transitioning){
       const u = clamp((t - morphStart) / morphDur, 0, 1);
@@ -1917,5 +1998,10 @@ export function initApp(){
     slides,
   };
 
-  if(!document.body.classList.contains("kiosk")) setPanelVisible(true);
+  updateKioskButton();
+  if(shouldStartKiosk){
+    void setKioskMode(true);
+  } else {
+    setPanelVisible(true);
+  }
 }

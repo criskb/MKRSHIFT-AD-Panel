@@ -409,5 +409,15 @@ body[data-theme="light"] .timeline-settings details{
 }
 
 /* Hide UI for kiosk mode */
-body.kiosk #panel, body.kiosk #hud, body.kiosk #timelineDock, body.kiosk #controlDock{display:none;}
-body.kiosk #drawer{display:none;}
+body.kiosk #panel,
+body.kiosk #hud,
+body.kiosk #timelineDock,
+body.kiosk #controlDock,
+body.ui-hidden #panel,
+body.ui-hidden #hud,
+body.ui-hidden #timelineDock,
+body.ui-hidden #controlDock{display:none;}
+body.kiosk #drawer,
+body.ui-hidden #drawer{display:none;}
+body.kiosk #app,
+body.kiosk #canvasDropZone{pointer-events:none;}
