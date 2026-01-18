@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "sortablejs": "^1.15.2",
     "three": "^0.160.0",
     "tweakpane": "^3.1.7"
   },

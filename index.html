@@ -7,6 +7,7 @@
   </head>
   <body>
     <div id="app"></div>
+    <div id="canvasDropZone" aria-hidden="true"></div>
     <div id="mediaPool" aria-hidden="true"></div>
     <canvas id="halftoneCanvas" width="1" height="1" aria-hidden="true"></canvas>
 
@@ -447,6 +448,23 @@
         Tip: use transparent PNGs (logos) for the cleanest “OpenAI ad” style. For kiosk mode, open with <b>?kiosk=1</b>.
       </div>
     </div>
+
+    <aside id="drawer" aria-label="Layer drawer">
+      <div class="drawer-header">
+        <div>
+          <div class="drawer-title">Layer Drawer</div>
+          <div class="drawer-subtitle">Drag components onto the canvas</div>
+        </div>
+        <span class="drawer-hint">Snap + nudge ready</span>
+      </div>
+      <div id="drawerList" class="drawer-list">
+        <button class="drawer-item" type="button" data-layer="text">Text Block</button>
+        <button class="drawer-item" type="button" data-layer="shape">Shape</button>
+        <button class="drawer-item" type="button" data-layer="image">Image</button>
+        <button class="drawer-item" type="button" data-layer="overlay">Overlay</button>
+        <button class="drawer-item" type="button" data-layer="background">Background</button>
+      </div>
+    </aside>
 
     <div id="timelineDock" aria-label="Playlist timeline"></div>
 

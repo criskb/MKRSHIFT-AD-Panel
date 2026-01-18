@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import Sortable from "sortablejs";
+import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { clamp, lerp, ease, nowS, mulberry32 } from "./utils.js";
 import { loadSettings, saveSettings, DEFAULTS } from "./settings.js";
 import { VERT, FRAG, MEDIA_VERT, MEDIA_FRAG } from "./shaders.js";
@@ -40,6 +42,8 @@ export function initApp(){
   const btnFullscreen = el("btnFullscreen");
   const btnHide = el("btnHide");
   const dz = el("dropzone");
+  const drawerList = el("drawerList");
+  const canvasDropZone = el("canvasDropZone");
 
   const toastEl = el("toast");
   let toastTimer = null;
@@ -329,13 +333,127 @@ export function initApp(){
     markInteraction();
   });
 
+  function buildLayerTemplate(type, position){
+    const snapped = {
+      x: snapValue(position.x),
+      y: snapValue(position.y),
+      z: 0,
+    };
+    switch(type){
+      case "text":
+        return { type, text: "Edit Me", size: 48, color: "#ffffff", position: snapped };
+      case "shape":
+        return { type, width: 180, height: 120, color: "#00ffb3", position: snapped };
+      case "image":
+        return { type, width: 240, height: 160, color: "#ffffff", position: snapped };
+      case "overlay":
+        return { type, width: 260, height: 160, color: "#111111", opacity: 0.4, position: snapped };
+      case "background":
+        return {
+          type,
+          width: window.innerWidth,
+          height: window.innerHeight,
+          color: "#050505",
+          position: { x: 0, y: 0, z: -1 },
+        };
+      default:
+        return null;
+    }
+  }
+
+  async function addLayerFromDrop(type, position){
+    const layer = buildLayerTemplate(type, position);
+    if(!layer) return;
+    try{
+      const created = await layerManager.addLayer(layer);
+      selectLayer(created);
+    }catch(err){
+      console.error("Failed to add layer", err);
+      toast("Could not add layer");
+    }
+  }
+
+  if(drawerList && canvasDropZone){
+    new Sortable(drawerList, {
+      group: { name: "drawer", pull: "clone", put: false },
+      sort: false,
+      animation: 150,
+      onStart: () => canvasDropZone.classList.add("active"),
+      onEnd: () => canvasDropZone.classList.remove("active"),
+    });
+
+    new Sortable(canvasDropZone, {
+      group: { name: "drawer", pull: false, put: true },
+      sort: false,
+      onAdd: (event) => {
+        const type = event.item?.dataset?.layer;
+        const sourceEvent = event.originalEvent;
+        const clientX = sourceEvent?.clientX ?? lastPointer.x;
+        const clientY = sourceEvent?.clientY ?? lastPointer.y;
+        if(type){
+          const world = clientToWorld(clientX, clientY);
+          void addLayerFromDrop(type, world);
+        }
+        event.item?.remove();
+        canvasDropZone.classList.remove("active");
+      },
+    });
+  }
+
+  renderer.domElement.addEventListener("pointerdown", (event) => {
+    if(isTransforming) return;
+    if(event.button !== 0) return;
+    const rect = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+    const hits = raycaster.intersectObjects(layerManager.group.children, true);
+    if(hits.length){
+      const layer = findLayerFromObject(hits[0].object);
+      selectLayer(layer);
+    } else {
+      selectLayer(null);
+    }
+  });
+
+  function isEditableTarget(target){
+    if(!target) return false;
+    const tag = target.tagName;
+    return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
+  }
+
+  function nudgeSelectedLayer(dx, dy, fine){
+    if(!selectedLayer?.object3d) return false;
+    const step = fine ? GRID_SIZE / GRID_FINE_DIVISOR : GRID_SIZE;
+    const object = selectedLayer.object3d;
+    object.position.x = snapValue(object.position.x + dx * step, step);
+    object.position.y = snapValue(object.position.y + dy * step, step);
+    syncLayerTransform(selectedLayer);
+    return true;
+  }
+
   // Hotkeys
   window.addEventListener("keydown", (e)=>{
+    if(isEditableTarget(document.activeElement)) return;
     if(e.key === "h" || e.key === "H") toggleUI();
     if(e.key === "s" || e.key === "S") setPanelVisible(panel.classList.contains("hidden"));
     if(e.key === "f" || e.key === "F") toggleFullscreen();
-    if(e.key === "ArrowRight") nextSlide();
-    if(e.key === "ArrowLeft") prevSlide();
+    if(e.key === "r" || e.key === "R") transformControls.setMode("rotate");
+    if(e.key === "e" || e.key === "E") transformControls.setMode("scale");
+    if(e.key === "ArrowUp"){
+      if(nudgeSelectedLayer(0, 1, e.shiftKey)) return;
+    }
+    if(e.key === "ArrowDown"){
+      if(nudgeSelectedLayer(0, -1, e.shiftKey)) return;
+    }
+    if(e.key === "ArrowRight"){
+      if(nudgeSelectedLayer(1, 0, e.shiftKey)) return;
+      nextSlide();
+    }
+    if(e.key === "ArrowLeft"){
+      if(nudgeSelectedLayer(-1, 0, e.shiftKey)) return;
+      prevSlide();
+    }
   });
 
   // Auto-hide panel after inactivity
@@ -343,6 +461,9 @@ export function initApp(){
   function markInteraction(){ lastInteraction = performance.now(); }
   window.addEventListener("pointerdown", markInteraction, {passive:true});
   window.addEventListener("pointermove", markInteraction, {passive:true});
+  window.addEventListener("pointermove", (event) => {
+    lastPointer = { x: event.clientX, y: event.clientY };
+  }, { passive: true });
 
   function maybeAutoHideUI(){
     if(document.body.classList.contains("kiosk")) return;
@@ -404,10 +525,53 @@ export function initApp(){
   const camera = new THREE.OrthographicCamera(-1,1,1,-1,-1000,1000);
   const layerManager = new LayerManager({ scene });
   scene.userData.layerManager = layerManager;
+  const GRID_SIZE = 20;
+  const GRID_FINE_DIVISOR = 5;
+  let gridHelper = null;
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+  let selectedLayer = null;
+  let isTransforming = false;
+  let lastPointer = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+
+  function updateGridHelper(){
+    if(gridHelper){
+      scene.remove(gridHelper);
+    }
+    const size = Math.max(window.innerWidth, window.innerHeight) * 2;
+    const divisions = Math.max(2, Math.round(size / GRID_SIZE));
+    gridHelper = new THREE.GridHelper(size, divisions, 0x00ffb3, 0x1a1a1a);
+    gridHelper.rotation.x = Math.PI / 2;
+    const materials = Array.isArray(gridHelper.material) ? gridHelper.material : [gridHelper.material];
+    materials.forEach((material) => {
+      material.transparent = true;
+      material.opacity = 0.18;
+    });
+    gridHelper.position.z = -0.5;
+    gridHelper.renderOrder = -1;
+    scene.add(gridHelper);
+  }
   const postFX = new PostFXManager(renderer, scene, camera);
   postFX.settings.bloom.strength = settings.bloomStrength;
   postFX.settings.afterimage.damp = settings.trailDamp;
   postFX.setMode(settings.pipeline);
+
+  const transformControls = new TransformControls(camera, renderer.domElement);
+  transformControls.setMode("scale");
+  transformControls.setTranslationSnap(GRID_SIZE);
+  transformControls.setRotationSnap(THREE.MathUtils.degToRad(15));
+  transformControls.setScaleSnap(0.1);
+  transformControls.visible = false;
+  scene.add(transformControls);
+
+  transformControls.addEventListener("dragging-changed", (event) => {
+    isTransforming = event.value;
+  });
+
+  transformControls.addEventListener("objectChange", () => {
+    if(!selectedLayer || !transformControls.object) return;
+    syncLayerTransform(selectedLayer);
+  });
 
   document.addEventListener("visibilitychange", () => {
     postFX.enabled = !document.hidden && postFX.mode !== "none";
@@ -461,6 +625,52 @@ export function initApp(){
     rtTo.setSize(w, h);
     updateScaleUniform();
     updateMediaScale();
+    updateGridHelper();
+  }
+
+  function snapValue(value, step = GRID_SIZE){
+    return Math.round(value / step) * step;
+  }
+
+  function clientToWorld(clientX, clientY){
+    const rect = renderer.domElement.getBoundingClientRect();
+    const ndcX = ((clientX - rect.left) / rect.width) * 2 - 1;
+    const ndcY = -((clientY - rect.top) / rect.height) * 2 + 1;
+    const position = new THREE.Vector3(ndcX, ndcY, 0);
+    position.unproject(camera);
+    return position;
+  }
+
+  function findLayerFromObject(object){
+    let current = object;
+    while(current){
+      if(current.userData?.layerId){
+        return layerManager.layers.find((layer) => layer.id === current.userData.layerId) || null;
+      }
+      current = current.parent;
+    }
+    return null;
+  }
+
+  function selectLayer(layer){
+    selectedLayer = layer;
+    if(layer?.object3d){
+      transformControls.attach(layer.object3d);
+      transformControls.visible = true;
+    } else {
+      transformControls.detach();
+      transformControls.visible = false;
+    }
+  }
+
+  function syncLayerTransform(layer){
+    if(!layer?.object3d) return;
+    const object = layer.object3d;
+    layerManager.updateLayer(layer.id, {
+      position: { x: object.position.x, y: object.position.y, z: object.position.z },
+      rotation: { x: object.rotation.x, y: object.rotation.y, z: object.rotation.z },
+      scale: { x: object.scale.x, y: object.scale.y, z: object.scale.z },
+    });
   }
 
   const material = new THREE.ShaderMaterial({
