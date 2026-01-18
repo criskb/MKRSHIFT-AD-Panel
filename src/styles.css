@@ -53,6 +53,75 @@ canvas{display:block;}
 }
 #panel.hidden{display:none;}
 
+.drawer-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:10px;
+}
+.drawer-title{font-weight:700;font-size:13px;letter-spacing:.2px;}
+.drawer-subtitle{font-size:11px;color:var(--ui-tx-dim);margin-top:3px;}
+.drawer-hint{
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+  color:var(--ui-tx-dim);
+  border:1px solid var(--glass-bd);
+  padding:4px 8px;
+  border-radius:999px;
+  background:rgba(0,0,0,.2);
+}
+
+#drawer{
+  position:fixed;
+  left:12px;
+  top:70px;
+  z-index:26;
+  width:min(220px, calc(100vw - 24px));
+  background:var(--glass-bg);
+  border:1px solid var(--glass-bd);
+  border-radius:14px;
+  padding:12px;
+  color:var(--ui-tx);
+  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  box-shadow:var(--glass-shadow);
+  pointer-events:auto;
+}
+
+.drawer-list{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+
+.drawer-item{
+  text-align:left;
+  background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.12);
+  color:var(--ui-tx);
+  border-radius:12px;
+  padding:9px 10px;
+  font-weight:600;
+  font-size:12px;
+  cursor:grab;
+}
+.drawer-item:active{cursor:grabbing;}
+body[data-theme="light"] .drawer-item{
+  background:rgba(0,0,0,.05);
+  border-color:rgba(0,0,0,.12);
+}
+
+#canvasDropZone{
+  position:fixed;
+  inset:0;
+  z-index:12;
+  pointer-events:none;
+}
+#canvasDropZone.active{
+  pointer-events:auto;
+}
+
 .section-title{
   margin:12px 0 6px;
   font-size:11px;
@@ -341,3 +410,4 @@ body[data-theme="light"] .timeline-settings details{
 
 /* Hide UI for kiosk mode */
 body.kiosk #panel, body.kiosk #hud, body.kiosk #timelineDock, body.kiosk #controlDock{display:none;}
+body.kiosk #drawer{display:none;}
