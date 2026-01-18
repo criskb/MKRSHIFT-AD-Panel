@@ -1498,6 +1498,7 @@ export function initApp(){
     const dt = clock.getDelta();
     material.uniforms.uTime.value = t;
     mediaMaterial.uniforms.uTime.value = t;
+    layerManager.update(dt);
 
     if(currentSlide?.animated){
       if(currentSlide.type === "video"){

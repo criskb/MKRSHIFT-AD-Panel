@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { FontLoader } from "three/examples/jsm/loaders/FontLoader.js";
 import { TextGeometry } from "three/examples/jsm/geometries/TextGeometry.js";
+import { USDZLoader } from "three/examples/jsm/loaders/USDZLoader.js";
 import helvetikerUrl from "three/examples/fonts/helvetiker_regular.typeface.json?url";
 
 const SUPPORTED_LAYER_TYPES = new Set([
@@ -57,6 +58,34 @@ function applyMaterialSettings(material, layer){
   material.needsUpdate = true;
 }
 
+function getAutoRotateSpeed(autoRotate){
+  if(autoRotate === true){
+    return { x: 0, y: 0.5, z: 0 };
+  }
+  if(typeof autoRotate === "number"){
+    return { x: 0, y: autoRotate, z: 0 };
+  }
+  if(autoRotate && typeof autoRotate === "object"){
+    return {
+      x: autoRotate.x ?? 0,
+      y: autoRotate.y ?? 0,
+      z: autoRotate.z ?? 0,
+    };
+  }
+  return null;
+}
+
+function disposeMaterial(material){
+  if(!material) return;
+  for(const key in material){
+    const value = material[key];
+    if(value && value.isTexture){
+      value.dispose();
+    }
+  }
+  material.dispose();
+}
+
 export class LayerManager {
   constructor({ scene, groupName = "LayerGroup" } = {}){
     this.scene = scene || null;
@@ -65,6 +94,7 @@ export class LayerManager {
     this.layers = [];
     this.fontLoader = new FontLoader();
     this.textureLoader = new THREE.TextureLoader();
+    this.modelLoader = new USDZLoader();
 
     if(this.scene){
       this.scene.add(this.group);
@@ -98,6 +128,7 @@ export class LayerManager {
     const [removed] = this.layers.splice(index, 1);
     if(removed?.object3d){
       this.group.remove(removed.object3d);
+      this.disposeObject3D(removed.object3d, removed);
     }
     this.updateLayerOrder();
     return removed;
@@ -135,6 +166,11 @@ export class LayerManager {
       }
     }
 
+    if(layer.type === "3dmodel" && (updates?.url || updates?.object3d)){
+      const newObject = await this.createModelLayer(layer);
+      this.replaceLayerObject(layer, newObject);
+    }
+
     if(layer.object3d){
       applyTransform(layer.object3d, layer);
       applyMaterialSettings(layer.object3d.material, layer);
@@ -169,6 +205,7 @@ export class LayerManager {
     this.layers.forEach((layer) => {
       if(layer.object3d){
         this.group.remove(layer.object3d);
+        this.disposeObject3D(layer.object3d, layer);
       }
     });
     this.layers = [];
@@ -177,6 +214,7 @@ export class LayerManager {
   replaceLayerObject(layer, newObject){
     if(layer.object3d){
       this.group.remove(layer.object3d);
+      this.disposeObject3D(layer.object3d, layer);
     }
     layer.object3d = newObject;
     newObject.userData.layerId = layer.id;
@@ -190,6 +228,23 @@ export class LayerManager {
     this.layers.forEach((layer, index) => {
       if(layer.object3d){
         layer.object3d.renderOrder = index;
+      }
+    });
+  }
+
+  update(delta){
+    if(!delta) return;
+    this.layers.forEach((layer) => {
+      if(layer.animationMixer){
+        layer.animationMixer.update(delta);
+      }
+      if(layer.object3d && layer.autoRotate){
+        const speed = getAutoRotateSpeed(layer.autoRotate);
+        if(speed){
+          layer.object3d.rotation.x += speed.x * delta;
+          layer.object3d.rotation.y += speed.y * delta;
+          layer.object3d.rotation.z += speed.z * delta;
+        }
       }
     });
   }
@@ -309,13 +364,32 @@ export class LayerManager {
     return new THREE.Mesh(geometry, material);
   }
 
-  createModelLayer(layer){
+  async createModelLayer(layer){
     if(layer.object3d instanceof THREE.Object3D){
       return layer.object3d;
+    }
+    if(layer.url){
+      const model = await this.loadUSDZModel(layer.url);
+      model.name = layer.name ?? "ModelLayer";
+      if(Array.isArray(model.animations) && model.animations.length){
+        const mixer = new THREE.AnimationMixer(model);
+        model.animations.forEach((clip) => mixer.clipAction(clip).play());
+        layer.animationMixer = mixer;
+      }
+      return model;
     }
     const group = new THREE.Group();
     group.name = layer.name ?? "ModelLayer";
     return group;
+  }
+
+  async loadUSDZModel(url){
+    if(this.modelLoader.loadAsync){
+      return this.modelLoader.loadAsync(url);
+    }
+    return new Promise((resolve, reject) => {
+      this.modelLoader.load(url, resolve, undefined, reject);
+    });
   }
 
   async loadTexture(url){
@@ -342,6 +416,26 @@ export class LayerManager {
       playPromise.catch(() => {});
     }
     return video;
+  }
+
+  disposeObject3D(object3d, layer){
+    if(layer?.animationMixer){
+      layer.animationMixer.stopAllAction();
+      layer.animationMixer.uncacheRoot(object3d);
+      layer.animationMixer = null;
+    }
+    object3d.traverse((child) => {
+      if(child.isMesh){
+        if(child.geometry){
+          child.geometry.dispose();
+        }
+        if(Array.isArray(child.material)){
+          child.material.forEach((material) => disposeMaterial(material));
+        } else if(child.material){
+          disposeMaterial(child.material);
+        }
+      }
+    });
   }
 }
 
