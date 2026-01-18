@@ -404,7 +404,10 @@ export function initApp(){
   ui.btnAdd.addEventListener("click", ()=> ui.file.click());
   ui.file.addEventListener("change", async () => {
     const files = [...ui.file.files].filter(isSupportedFile);
-    if (!files.length) return;
+    if (!files.length){
+      toast("Unsupported file type. Use PNG/JPG/WebP/GIF/MP4/WebM/MOV.");
+      return;
+    }
     toast(`Loading ${files.length} file(s)...`);
     try{
       await addFilesAsSlides(files);
@@ -489,7 +492,10 @@ export function initApp(){
   });
   window.addEventListener("drop", async (e) => {
     const files = [...(e.dataTransfer?.files || [])].filter(isSupportedFile);
-    if (!files.length) return;
+    if (!files.length){
+      toast("Unsupported file type. Use PNG/JPG/WebP/GIF/MP4/WebM/MOV.");
+      return;
+    }
     toast(`Loading ${files.length} file(s)...`);
     try{
       await addFilesAsSlides(files);
