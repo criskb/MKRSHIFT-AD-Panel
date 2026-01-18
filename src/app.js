@@ -206,6 +206,8 @@ export function initApp(){
     particleControls: el("particleControls"),
     motionControls: el("motionControls"),
     halftoneControls: el("halftoneControls"),
+    fpsReadout: el("fpsReadout"),
+    fpsMode: el("fpsMode"),
   };
 
   const SLIDE_OVERRIDE_KEYS = [
@@ -1911,9 +1913,63 @@ export function initApp(){
   nextAuto = nowS() + getSlideDuration(slides[currentSlideIndex]);
 
   const clock = new THREE.Clock();
+  const FPS_THRESHOLD = 30;
+  const FPS_RECOVER = 40;
+  const FPS_SAMPLE_WINDOW_MS = 500;
+  let fpsFrameCount = 0;
+  let fpsLastSample = performance.now();
+  let currentFps = 0;
+  let lowFpsMode = false;
+
+  function updateFpsUI(value){
+    if(!ui.fpsReadout) return;
+    ui.fpsReadout.textContent = Number.isFinite(value) ? `${Math.round(value)}` : "--";
+  }
+
+  function setLowFpsMode(enable){
+    if(enable === lowFpsMode) return;
+    if(enable){
+      postFX.setMode("clean");
+      postFX.settings.bloom.strength = 0;
+      postFX.settings.afterimage.damp = Math.min(settings.trailDamp, 0.85);
+      applyToneSettings(settings);
+      mediaMaterial.uniforms.uGrain.value = 0;
+      mediaMaterial.uniforms.uVignette.value = 0;
+      mediaMaterial.uniforms.uSharpen.value = 0;
+      mediaMaterial.uniforms.uChromAb.value = 0;
+      transitionMat.uniforms.rgbSplit.value = 0;
+    } else {
+      postFX.setMode(settings.pipeline);
+      postFX.settings.bloom.strength = settings.bloomStrength;
+      postFX.settings.afterimage.damp = settings.trailDamp;
+      applyToneSettings(settings);
+      transitionMat.uniforms.rgbSplit.value = settings.chromSplit;
+    }
+    postFX.enabled = !document.hidden && postFX.mode !== "none";
+    syncPostFXRenderSource();
+    lowFpsMode = enable;
+    if(ui.fpsMode){
+      ui.fpsMode.textContent = enable ? "Low" : "Normal";
+    }
+  }
 
   function tick(){
     requestAnimationFrame(tick);
+
+    const nowMs = performance.now();
+    fpsFrameCount += 1;
+    const fpsElapsed = nowMs - fpsLastSample;
+    if(fpsElapsed >= FPS_SAMPLE_WINDOW_MS){
+      currentFps = (fpsFrameCount / fpsElapsed) * 1000;
+      fpsFrameCount = 0;
+      fpsLastSample = nowMs;
+      updateFpsUI(currentFps);
+      if(!lowFpsMode && currentFps < FPS_THRESHOLD){
+        setLowFpsMode(true);
+      } else if(lowFpsMode && currentFps >= FPS_RECOVER){
+        setLowFpsMode(false);
+      }
+    }
 
     const t = nowS();
     const dt = clock.getDelta();
