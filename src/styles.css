@@ -41,6 +41,16 @@ canvas{display:block;}
   z-index:32;
 }
 
+.ui-dock{
+  position:fixed;
+  top:12px;
+  left:50%;
+  transform:translateX(-50%);
+  z-index:33;
+  display:flex;
+  gap:8px;
+}
+
 .settings-modal{
   position:fixed;
   inset:0;
@@ -145,6 +155,11 @@ body[data-theme="light"] .settings-block{
   border-radius:999px;
   background:rgba(0,0,0,.2);
 }
+.drawer-actions{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
 
 #drawer{
   position:fixed;
@@ -161,6 +176,7 @@ body[data-theme="light"] .settings-block{
   box-shadow:var(--glass-shadow);
   pointer-events:auto;
 }
+#drawer.is-hidden{display:none;}
 
 .drawer-list{
   display:flex;
@@ -341,7 +357,7 @@ body[data-theme="light"] #dropzone.drag{
   border-radius:12px;
   padding:10px;
   background:rgba(0,0,0,.2);
-  max-height:220px;
+  max-height:280px;
   overflow:hidden;
 }
 body[data-theme="light"] .timeline-card{
@@ -377,6 +393,30 @@ body[data-theme="light"] .timeline-card{
   margin-top:8px;
   display:grid;
   gap:8px;
+}
+.timeline-preview{
+  margin-top:8px;
+  border-radius:10px;
+  overflow:hidden;
+  background:rgba(0,0,0,.28);
+  height:120px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.timeline-preview img,
+.timeline-preview video{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+}
+.timeline-preview-text{
+  font-size:11px;
+  color:var(--ui-tx-dim);
+  text-align:center;
+  padding:10px;
+  line-height:1.4;
 }
 .layer-inspector{
   display:grid;
@@ -499,5 +539,8 @@ body.ui-hidden #hud,
 body.ui-hidden #timelineDock{display:none;}
 body.kiosk #drawer,
 body.ui-hidden #drawer{display:none;}
+body.kiosk #uiDock{display:none;}
+body.ui-hidden #btnSettings{display:none;}
+body.kiosk #btnSettings{display:none;}
 body.kiosk #app,
 body.kiosk #canvasDropZone{pointer-events:none;}
